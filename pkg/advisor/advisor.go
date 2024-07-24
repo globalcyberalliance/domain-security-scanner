@@ -236,6 +236,7 @@ func (a *Advisor) CheckDMARC(record string) (advice []string) {
 	dmarcRecord := dmarc{}
 	parts := strings.Split(record, ";")
 	ruaExists := strings.Contains(record, "rua=")
+	var vFound, pFound bool
 
 	for index, part := range parts {
 		keyValue := strings.SplitN(strings.TrimSpace(part), "=", 2)
@@ -248,12 +249,14 @@ func (a *Advisor) CheckDMARC(record string) (advice []string) {
 
 		switch key {
 		case "v":
+			vFound = true
 			if index != 0 || value != "DMARC1" {
 				dmarcRecord.Advice = append(dmarcRecord.Advice, "The beginning of your DMARC record should be v=DMARC1 with specific capitalization.")
 			}
 
 			dmarcRecord.Version = value
 		case "p":
+			pFound = true
 			if index != 1 {
 				dmarcRecord.Advice = append(dmarcRecord.Advice, "The second tag in your DMARC record must be p=none/p=quarantine/p=reject.")
 			}
@@ -324,8 +327,15 @@ func (a *Advisor) CheckDMARC(record string) (advice []string) {
 				dmarcRecord.Advice = append(dmarcRecord.Advice, "Invalid failure options specified, the record must be fo=0/fo=1/fo=d/fo=s.")
 			}
 		case "aspf":
-			dmarcRecord.ASPF = value
+			if value != "r" && value != "s" {
+				dmarcRecord.Advice = append(dmarcRecord.Advice, "aspf value is invalid, must be 'r' or 's'")
+			}
+
 		case "adkim":
+			if value != "r" && value != "s" {
+				dmarcRecord.Advice = append(dmarcRecord.Advice, "adkim value is invalid, must be 'r' or 's'")
+			}
+
 			dmarcRecord.ADKIM = value
 		case "ri":
 			ri, err := strconv.Atoi(value)
@@ -339,6 +349,14 @@ func (a *Advisor) CheckDMARC(record string) (advice []string) {
 
 			dmarcRecord.ReportInterval = ri
 		}
+	}
+
+	if !vFound {
+		dmarcRecord.Advice = append(dmarcRecord.Advice, "The first tag in your DMARC record should be v=DMARC1")
+	}
+
+	if !pFound {
+		dmarcRecord.Advice = append(dmarcRecord.Advice, "No DMARC policy found, record must contain p=none/p=quarantine/p=reject")
 	}
 
 	if len(dmarcRecord.AggregateReportDestination) == 0 {
@@ -427,15 +445,59 @@ func (a *Advisor) CheckSPF(spf string) []string {
 		return []string{"We couldn't detect any active SPF record for your domain. Please visit https://dmarcguide.globalcyberalliance.org to fix this."}
 	}
 
-	if strings.Contains(spf, "all") {
-		if strings.Contains(spf, "+all") {
-			return []string{"Your SPF record contains the +all tag. It is strongly recommended that this be changed to either -all or ~all. The +all tag allows for any system regardless of SPF to send mail on the organization’s behalf."}
-		}
-	} else {
-		return []string{"Your SPF record is missing the all tag. Please visit https://dmarcguide.globalcyberalliance.org to fix this."}
+	var advice []string
+
+	parts := strings.Split(spf, " ")
+
+	if strings.ToLower(parts[0]) != "v=spf1" {
+		advice = append(advice, "Your SPF record should begin with v=spf1")
 	}
 
-	return []string{"SPF seems to be setup correctly! No further action needed."}
+	var lookupNumber int = 0
+
+	for _, part := range parts {
+		var keyValue []string
+
+		if strings.Contains(part, "=") {
+			keyValue = strings.SplitN(part, "=", 2)
+		} else {
+			keyValue = strings.SplitN(part, ":", 2)
+		}
+
+		key := strings.ToLower(keyValue[0])
+
+		switch key {
+		case "include",
+			"a",
+			"mx",
+			"ptr",
+			"exists",
+			"redirect":
+			lookupNumber += 1
+		}
+	}
+
+	if lookupNumber > 10 {
+		advice = append(advice, "SPF record contains more than 10 DNS lookups, and your SPF record check will fail. Consider using 'ip4' and 'ip6' mechanisms.")
+	}
+
+	if strings.Contains(spf, "ptr") {
+		advice = append(advice, "The 'ptr' mechanism is deprecated, and is unreliable. It is strongly recommended that it not be used.")
+	}
+
+	if strings.Contains(spf, "all") {
+		if strings.Contains(spf, "+all") {
+			advice = append(advice, "Your SPF record contains the +all tag. It is strongly recommended that this be changed to either -all or ~all. The +all tag allows for any system regardless of SPF to send mail on the organization’s behalf.")
+		}
+	} else {
+		advice = append(advice, "Your SPF record is missing the all tag. Please visit https://dmarcguide.globalcyberalliance.org to fix this.")
+	}
+
+	if len(advice) == 0 {
+		advice = append(advice, "SPF seems to be setup correctly! No further action needed.")
+	}
+
+	return advice
 }
 
 func (a *Advisor) checkHostTLS(hostname string, port int) (advice []string) {
