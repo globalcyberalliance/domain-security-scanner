@@ -326,18 +326,18 @@ func (a *Advisor) CheckDMARC(record string) (advice []string) {
 			if dmarcRecord.FailureOptions != "0" && dmarcRecord.FailureOptions != "1" && dmarcRecord.FailureOptions != "d" && dmarcRecord.FailureOptions != "s" {
 				dmarcRecord.Advice = append(dmarcRecord.Advice, "Invalid failure options specified, the record must be fo=0/fo=1/fo=d/fo=s.")
 			}
-		case "aspf":
-			if value != "r" && value != "s" {
-				dmarcRecord.Advice = append(dmarcRecord.Advice, "aspf value is invalid, must be 'r' or 's'")
-			}
-			
-			dmarcRecord.ASPF = value
 		case "adkim":
 			if value != "r" && value != "s" {
-				dmarcRecord.Advice = append(dmarcRecord.Advice, "adkim value is invalid, must be 'r' or 's'")
+				dmarcRecord.Advice = append(dmarcRecord.Advice, "The adkim value is invalid, it must be 'r' or 's'.")
 			}
 
 			dmarcRecord.ADKIM = value
+		case "aspf":
+			if value != "r" && value != "s" {
+				dmarcRecord.Advice = append(dmarcRecord.Advice, "The aspf value is invalid, it must be 'r' or 's'.")
+			}
+
+			dmarcRecord.ASPF = value
 		case "ri":
 			ri, err := strconv.Atoi(value)
 			if err != nil {
@@ -349,15 +349,17 @@ func (a *Advisor) CheckDMARC(record string) (advice []string) {
 			}
 
 			dmarcRecord.ReportInterval = ri
+		default:
+			dmarcRecord.Advice = append(dmarcRecord.Advice, "Unexpected tag in record: "+key+".")
 		}
 	}
 
 	if !vFound {
-		dmarcRecord.Advice = append(dmarcRecord.Advice, "The first tag in your DMARC record should be v=DMARC1")
+		dmarcRecord.Advice = append(dmarcRecord.Advice, "The first tag in your DMARC record should be v=DMARC1.")
 	}
 
 	if !pFound {
-		dmarcRecord.Advice = append(dmarcRecord.Advice, "No DMARC policy found, record must contain p=none/p=quarantine/p=reject")
+		dmarcRecord.Advice = append(dmarcRecord.Advice, "No DMARC policy found, record must contain p=none/p=quarantine/p=reject.")
 	}
 
 	if len(dmarcRecord.AggregateReportDestination) == 0 {
