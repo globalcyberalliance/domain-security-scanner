@@ -330,7 +330,8 @@ func (a *Advisor) CheckDMARC(record string) (advice []string) {
 			if value != "r" && value != "s" {
 				dmarcRecord.Advice = append(dmarcRecord.Advice, "aspf value is invalid, must be 'r' or 's'")
 			}
-
+			
+			dmarcRecord.ASPF = value
 		case "adkim":
 			if value != "r" && value != "s" {
 				dmarcRecord.Advice = append(dmarcRecord.Advice, "adkim value is invalid, must be 'r' or 's'")
@@ -455,6 +456,7 @@ func (a *Advisor) CheckSPF(spf string) []string {
 
 	var lookupNumber int = 0
 
+	// count dns lookups
 	for _, part := range parts {
 		var keyValue []string
 
