@@ -450,39 +450,18 @@ func (a *Advisor) CheckSPF(spf string) []string {
 
 	var advice []string
 
-	parts := strings.Split(spf, " ")
-
-	if strings.ToLower(parts[0]) != "v=spf1" {
+	if !strings.HasPrefix(spf, "v=spf1") {
 		advice = append(advice, "Your SPF record should begin with v=spf1")
 	}
 
-	var lookupNumber int = 0
-
-	// count dns lookups
-	for _, part := range parts {
-		var keyValue []string
-
-		if strings.Contains(part, "=") {
-			keyValue = strings.SplitN(part, "=", 2)
-		} else {
-			keyValue = strings.SplitN(part, ":", 2)
-		}
-
-		key := strings.ToLower(keyValue[0])
-
-		switch key {
-		case "include",
-			"a",
-			"mx",
-			"ptr",
-			"exists",
-			"redirect":
-			lookupNumber += 1
-		}
+	lookupCount := 0
+	lookupError := checkSPFLookup(spf, []string{}, &lookupCount)
+	if lookupError != "" {
+		advice = append(advice, lookupError)
 	}
 
-	if lookupNumber > 10 {
-		advice = append(advice, "SPF record contains more than 10 DNS lookups, and your SPF record check will fail. Consider using 'ip4' and 'ip6' mechanisms.")
+	if lookupCount > 10 {
+		advice = append(advice, "SPF record contains "+strconv.Itoa(lookupCount)+" DNS lookups, which is more than 10 lookup limit. your SPF record check will fail, consider using 'ip4' and 'ip6' mechanisms instead.")
 	}
 
 	if strings.Contains(spf, "ptr") {
@@ -503,7 +482,7 @@ func (a *Advisor) CheckSPF(spf string) []string {
 
 	return advice
 }
-
+	
 func (a *Advisor) checkHostTLS(hostname string, port int) (advice []string) {
 	// strip the trailing dot from DNS records
 	if string(hostname[len(hostname)-1]) == "." {
@@ -549,6 +528,65 @@ func (a *Advisor) checkHostTLS(hostname string, port int) (advice []string) {
 	advice = append(advice, checkTLSVersion(conn.ConnectionState().Version))
 
 	return advice
+}
+
+func checkSPFLookup(spf string, lookupParents []string, lookupCount *int) string {
+
+	//get DNS lookups from record
+	parts := strings.Split(spf, " ")
+	for _, part := range parts {
+		var keyValue []string
+
+		if strings.Contains(part, ":") {
+			keyValue = strings.Split(part, ":")
+		} else {
+			keyValue = strings.Split(part, "=")
+		}
+
+		key := strings.ToLower(keyValue[0])
+
+		switch key {
+		case "a",
+			"mx",
+			"ptr",
+			"exists",
+			"redirect":
+			*lookupCount++
+
+		case "include":
+			*lookupCount++
+
+			value := keyValue[1]
+			for _, parent := range lookupParents {
+				if parent == value {
+					return "SPF record contains cyclid lookup chain begining at" + key + "."
+				}
+			}
+
+			//get spf record of target
+			txtRecords, err := net.LookupTXT(value)
+			if err != nil {
+				return "Error when accessing SPF record for " + value + "."
+			}
+			if spf == "" {
+				return "Could not find required SPF record at " + value + "."
+			}
+
+			var newSPF string
+			for index, record := range txtRecords {
+				if strings.HasPrefix(record, "v=spf1") {
+					newSPF = txtRecords[index]
+					break
+				}
+			}
+
+			lookupError := checkSPFLookup(newSPF, append(lookupParents, value), lookupCount)
+			if lookupError != "" {
+				return lookupError
+			}
+		}
+	}
+	return ""
 }
 
 func (a *Advisor) checkMailTls(hostname string) (advice []string) {
