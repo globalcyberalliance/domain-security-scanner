@@ -71,7 +71,7 @@ func TestOptionWithDKIMSelectors(t *testing.T) {
 	t.Run("ValidDKIMSelectors", func(t *testing.T) {
 		scanner, err := New(logger, timeout, WithDKIMSelectors("selector1", "selector1._google"))
 		require.NoError(t, err)
-		require.Equal(t, []string{"selector1", "selector1._google"}, scanner.dkimSelectors)
+		require.Equal(t, []string{"selector1", "selector1._google"}, scanner.dnsClient.DkimSelectors)
 	})
 
 	t.Run("InvalidDKIMSelectorEndingCharacter", func(t *testing.T) {
@@ -112,19 +112,19 @@ func TestOptionWithDNSBuffer(t *testing.T) {
 	t.Run("BufferWithinLimit", func(t *testing.T) {
 		scanner, err := New(logger, timeout, WithDNSBuffer(2048))
 		require.NoError(t, err)
-		require.Equal(t, uint16(2048), scanner.dnsBuffer)
+		require.Equal(t, uint16(2048), scanner.dnsClient.Buffer)
 	})
 
 	t.Run("BufferExceedsLimit", func(t *testing.T) {
 		scanner, err := New(logger, timeout, WithDNSBuffer(5000))
 		require.NoError(t, err)
-		require.Equal(t, uint16(5000), scanner.dnsBuffer)
+		require.Equal(t, uint16(5000), scanner.dnsClient.Buffer)
 	})
 
 	t.Run("BufferAtLimit", func(t *testing.T) {
 		scanner, err := New(logger, timeout, WithDNSBuffer(4096))
 		require.NoError(t, err)
-		require.Equal(t, uint16(4096), scanner.dnsBuffer)
+		require.Equal(t, uint16(4096), scanner.dnsClient.Buffer)
 	})
 }
 
@@ -163,7 +163,7 @@ func TestOptionWithNameservers(t *testing.T) {
 	t.Run("EmptyNameservers", func(t *testing.T) {
 		scanner, err := New(logger, timeout, WithNameservers(nil))
 		require.NoError(t, err)
-		require.NotEmpty(t, scanner.nameservers)
+		require.NotEmpty(t, scanner.dnsClient.Nameservers)
 	})
 
 	t.Run("InvalidNameservers", func(t *testing.T) {
@@ -174,24 +174,41 @@ func TestOptionWithNameservers(t *testing.T) {
 	t.Run("ValidNameserverWithPort", func(t *testing.T) {
 		scanner, err := New(logger, timeout, WithNameservers([]string{"8.8.8.8:53"}))
 		require.NoError(t, err)
-		require.Equal(t, []string{"8.8.8.8:53"}, scanner.nameservers)
+		require.Equal(t, []string{"8.8.8.8:53"}, scanner.dnsClient.Nameservers)
 	})
 
 	t.Run("ValidNameserverWithoutPort", func(t *testing.T) {
 		scanner, err := New(logger, timeout, WithNameservers([]string{"8.8.8.8"}))
 		require.NoError(t, err)
-		require.Equal(t, []string{"8.8.8.8:53"}, scanner.nameservers)
+		require.Equal(t, []string{"8.8.8.8:53"}, scanner.dnsClient.Nameservers)
 	})
 
 	t.Run("ValidNameserverWithPortV6", func(t *testing.T) {
 		scanner, err := New(logger, timeout, WithNameservers([]string{"[2001:4860:4860::8888]:53"}))
 		require.NoError(t, err)
-		require.Equal(t, []string{"[2001:4860:4860::8888]:53"}, scanner.nameservers)
+		require.Equal(t, []string{"[2001:4860:4860::8888]:53"}, scanner.dnsClient.Nameservers)
 	})
 
 	t.Run("ValidNameserverWithoutPortV6", func(t *testing.T) {
 		scanner, err := New(logger, timeout, WithNameservers([]string{"2001:4860:4860::8888"}))
 		require.NoError(t, err)
-		require.Equal(t, []string{"[2001:4860:4860::8888]:53"}, scanner.nameservers)
+		require.Equal(t, []string{"[2001:4860:4860::8888]:53"}, scanner.dnsClient.Nameservers)
+	})
+}
+
+func TestOptionWithScanDNSSEC(t *testing.T) {
+	logger := zerolog.Nop()
+	timeout := time.Second * 5
+
+	t.Run("ScanDNSSEC", func(t *testing.T) {
+		scanner, err := New(logger, timeout, WithScanDNSSEC(true))
+		require.NoError(t, err)
+		require.True(t, scanner.scanDNSSEC)
+	})
+
+	t.Run("DoNotScanDNSSEC", func(t *testing.T) {
+		scanner, err := New(logger, timeout, WithScanDNSSEC(false))
+		require.NoError(t, err)
+		require.False(t, scanner.scanDNSSEC)
 	})
 }

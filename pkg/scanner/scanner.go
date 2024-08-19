@@ -6,11 +6,10 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/cache"
-	"github.com/miekg/dns"
+	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/dns"
 	"github.com/panjf2000/ants/v2"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -30,7 +29,7 @@ type (
 		cacheDuration time.Duration
 
 		// dkimSelectors is used to specify where a DKIM record is hosted for a specific domain.
-		dkimSelectors []string
+		// dkimSelectors []string
 
 		// DNS client shared by all goroutines the scanner spawns.
 		dnsClient *dns.Client
@@ -42,19 +41,23 @@ type (
 		//
 		// This field is managed by atomic operations, and should only ever be referenced by the (*Scanner).getNS()
 		// method.
-		lastNameserverIndex uint32
+		//lastNameserverIndex uint32
 
 		// logger is the logger for the scanner.
 		logger zerolog.Logger
 
 		// nameservers is a slice of "host:port" strings of nameservers to issue queries against.
-		nameservers []string
+		// nameservers []string
 
 		// pool is the pool of workers for the scanner.
 		pool *ants.Pool
 
 		// poolSize is the size of the pool of workers for the scanner.
 		poolSize uint16
+
+		advisor *Advisor
+
+		scanDNSSEC bool
 	}
 
 	// Option defines a functional configuration type for a *Scanner.
@@ -62,14 +65,17 @@ type (
 
 	// Result holds the results of scanning a domain's DNS records.
 	Result struct {
-		Domain string   `json:"domain" yaml:"domain,omitempty" doc:"The domain name being scanned." example:"example.com"`
-		Error  string   `json:"error,omitempty" yaml:"error,omitempty" doc:"An error message if the scan failed." example:"invalid domain name"`
-		BIMI   string   `json:"bimi,omitempty" yaml:"bimi,omitempty" doc:"The BIMI record for the domain." example:"https://example.com/bimi.svg"`
-		DKIM   string   `json:"dkim,omitempty" yaml:"dkim,omitempty" doc:"The DKIM record for the domain." example:"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA"`
-		DMARC  string   `json:"dmarc,omitempty" yaml:"dmarc,omitempty" doc:"The DMARC record for the domain." example:"v=DMARC1; p=none"`
-		MX     []string `json:"mx,omitempty" yaml:"mx,omitempty" doc:"The MX records for the domain." example:"aspmx.l.google.com"`
-		NS     []string `json:"ns,omitempty" yaml:"ns,omitempty" doc:"The NS records for the domain." example:"ns1.example.com"`
-		SPF    string   `json:"spf,omitempty" yaml:"spf,omitempty" doc:"The SPF record for the domain." example:"v=spf1 include:_spf.google.com ~all"`
+		Domain    string   `json:"domain" yaml:"domain,omitempty" doc:"The domain name being scanned." example:"example.com"`
+		Error     string   `json:"error,omitempty" yaml:"error,omitempty" doc:"An error message if the scan failed." example:"invalid domain name"`
+		BIMI      string   `json:"bimi,omitempty" yaml:"bimi,omitempty" doc:"The BIMI record for the domain." example:"https://example.com/bimi.svg"`
+		DKIM      string   `json:"dkim,omitempty" yaml:"dkim,omitempty" doc:"The DKIM record for the domain." example:"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA"`
+		DMARC     string   `json:"dmarc,omitempty" yaml:"dmarc,omitempty" doc:"The DMARC record for the domain." example:"v=DMARC1; p=none"`
+		MX        []string `json:"mx,omitempty" yaml:"mx,omitempty" doc:"The MX records for the domain." example:"aspmx.l.google.com"`
+		NS        []string `json:"ns,omitempty" yaml:"ns,omitempty" doc:"The NS records for the domain." example:"ns1.example.com"`
+		SPF       string   `json:"spf,omitempty" yaml:"spf,omitempty" doc:"The SPF record for the domain." example:"v=spf1 include:_spf.google.com ~all"`
+		STS       string   `json:"mta-sts,omitempty" yaml:"mta-sts,omitempty" doc:"The MTA-STS record for the domain." example:"v=STSv1; id=20210803T010200;"`
+		STSPolicy string   `json:"mta-sts-policy,omitempty" yaml:"mta-sts-policy,omitempty" doc:"The MTA-STS policy for the domain." example:"version: STSv1\nmode: enforce\nmx: mail.example.com\nmx: *.example.net\nmax_age: 86400\n"`
+		DNSSEC    string   `json:"dnssec,omitempty" yaml:"dnssec,omitempty" doc:"The DNSSEC record for the domain." example:"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA"`
 	}
 )
 
@@ -78,18 +84,18 @@ func New(logger zerolog.Logger, timeout time.Duration, opts ...Option) (*Scanner
 		return nil, errors.New("timeout must be greater than 0")
 	}
 
-	dnsClient := new(dns.Client)
-	dnsClient.Net = "udp"
-	dnsClient.Timeout = timeout
-
-	scanner := &Scanner{
-		dnsClient:   dnsClient,
-		dnsBuffer:   4096,
-		logger:      logger,
-		nameservers: []string{"8.8.8.8:53", "8.8.4.4:53", "1.1.1.1:53"}, // Set the default nameservers to Google and Cloudflare
-		poolSize:    uint16(runtime.NumCPU()),
+	dnsClient, err := dns.New(timeout, 4096, 0, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create DNS client: %w", err)
 	}
 
+	scanner := &Scanner{
+		dnsClient: dnsClient,
+		dnsBuffer: 4096,
+		logger:    logger,
+		poolSize:  uint16(runtime.NumCPU()),
+	}
+	scanner.advisor = NewAdvisor(timeout, scanner.cacheDuration)
 	for _, opt := range opts {
 		if err := opt(scanner); err != nil {
 			return nil, errors.Wrap(err, "apply option")
@@ -163,10 +169,10 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 			}
 
 			// check that the domain name is valid
-			result.NS, err = s.getDNSRecords(domainToScan, dns.TypeNS)
+			result.NS, err = s.dnsClient.GetTypeNS(domainToScan)
 			if err != nil || len(result.NS) == 0 {
 				// check if TXT records exist, as the nameserver check won't work for subdomains
-				records, err := s.getDNSAnswers(domainToScan, dns.TypeTXT)
+				records, err := s.dnsClient.GetDNSAnswers(domainToScan, dns.TypeTXT)
 				if err != nil || len(records) == 0 {
 					// fill variable to satisfy deferred cache fill
 					result = &Result{
@@ -184,12 +190,12 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 
 			var errs []string
 			scanWg := sync.WaitGroup{}
-			scanWg.Add(5)
+			scanWg.Add(7)
 
 			// Get BIMI record
 			go func() {
 				defer scanWg.Done()
-				result.BIMI, err = s.getTypeBIMI(domainToScan)
+				result.BIMI, err = s.dnsClient.GetTypeBIMI(domainToScan)
 				if err != nil {
 					errs = append(errs, "bimi:"+err.Error())
 				}
@@ -198,7 +204,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 			// Get DKIM record
 			go func() {
 				defer scanWg.Done()
-				result.DKIM, err = s.getTypeDKIM(domainToScan)
+				result.DKIM, err = s.dnsClient.GetTypeDKIM(domainToScan)
 				if err != nil {
 					errs = append(errs, "dkim:"+err.Error())
 				}
@@ -207,7 +213,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 			// Get DMARC record
 			go func() {
 				defer scanWg.Done()
-				result.DMARC, err = s.getTypeDMARC(domainToScan)
+				result.DMARC, err = s.dnsClient.GetTypeDMARC(domainToScan)
 				if err != nil {
 					errs = append(errs, "dmarc:"+err.Error())
 				}
@@ -216,7 +222,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 			// Get MX records
 			go func() {
 				defer scanWg.Done()
-				result.MX, err = s.getDNSRecords(domainToScan, dns.TypeMX)
+				result.MX, err = s.dnsClient.GetTypeMX(domainToScan)
 				if err != nil {
 					errs = append(errs, "mx:"+err.Error())
 				}
@@ -225,9 +231,28 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 			// Get SPF record
 			go func() {
 				defer scanWg.Done()
-				result.SPF, err = s.getTypeSPF(domainToScan)
+				result.SPF, err = s.dnsClient.GetTypeSPF(domainToScan)
 				if err != nil {
 					errs = append(errs, "spf:"+err.Error())
+				}
+			}()
+
+			// Get MTA-STS record
+			go func() {
+				defer scanWg.Done()
+				result.STS, result.STSPolicy, err = s.dnsClient.GetTypeSTS(domainToScan)
+				if err != nil {
+					errs = append(errs, "mta-sts:"+err.Error())
+				}
+			}()
+
+			go func() {
+				defer scanWg.Done()
+				if s.scanDNSSEC {
+					result.DNSSEC, err = s.dnsClient.GetTypeDNSSEC(domainToScan)
+					if err != nil {
+						errs = append(errs, "dnssec:"+err.Error())
+					}
 				}
 			}()
 
@@ -284,6 +309,8 @@ func (s *Scanner) Close() {
 	s.logger.Debug().Msg("scanner closed")
 }
 
+/*
 func (s *Scanner) getNS() string {
 	return s.nameservers[int(atomic.AddUint32(&s.lastNameserverIndex, 1))%len(s.nameservers)]
 }
+*/
