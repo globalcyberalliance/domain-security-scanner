@@ -3,13 +3,12 @@ package model
 import (
 	"strings"
 
-	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/advisor"
 	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/scanner"
 )
 
 type ScanResultWithAdvice struct {
 	ScanResult *scanner.Result `json:"scanResult" yaml:"scanResult" doc:"The results of scanning a domain's DNS records."`
-	Advice     *advisor.Advice `json:"advice,omitempty" yaml:"advice,omitempty" doc:"The advice for the domain's DNS records."`
+	Advice     *scanner.Advice `json:"advice,omitempty" yaml:"advice,omitempty" doc:"The advice for the domain's DNS records."`
 }
 
 func (s *ScanResultWithAdvice) CSV() []string {

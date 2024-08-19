@@ -28,26 +28,14 @@ type (
 		// cacheDuration is the time-to-live for cache entries.
 		cacheDuration time.Duration
 
-		// dkimSelectors is used to specify where a DKIM record is hosted for a specific domain.
-		// dkimSelectors []string
-
 		// DNS client shared by all goroutines the scanner spawns.
 		dnsClient *dns.Client
 
 		// dnsBuffer is used to configure the size of the buffer allocated for DNS responses.
 		dnsBuffer uint16
 
-		// The index of the last-used nameserver, from the nameservers slice.
-		//
-		// This field is managed by atomic operations, and should only ever be referenced by the (*Scanner).getNS()
-		// method.
-		//lastNameserverIndex uint32
-
 		// logger is the logger for the scanner.
 		logger zerolog.Logger
-
-		// nameservers is a slice of "host:port" strings of nameservers to issue queries against.
-		// nameservers []string
 
 		// pool is the pool of workers for the scanner.
 		pool *ants.Pool
@@ -57,6 +45,7 @@ type (
 
 		advisor *Advisor
 
+		// scanDNSSEC is a flag to enable DNSSEC scanning.
 		scanDNSSEC bool
 	}
 
@@ -308,9 +297,3 @@ func (s *Scanner) Close() {
 	s.cache.Flush()
 	s.logger.Debug().Msg("scanner closed")
 }
-
-/*
-func (s *Scanner) getNS() string {
-	return s.nameservers[int(atomic.AddUint32(&s.lastNameserverIndex, 1))%len(s.nameservers)]
-}
-*/

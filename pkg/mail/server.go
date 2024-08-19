@@ -6,7 +6,6 @@ import (
 	textTmpl "text/template"
 	"time"
 
-	domainAdvisor "github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/advisor"
 	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/cache"
 	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/model"
 	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/scanner"
@@ -16,7 +15,7 @@ import (
 )
 
 type Server struct {
-	advisor      *domainAdvisor.Advisor
+	giveAdvice   bool
 	config       Config
 	cooldown     *cache.Cache[string]
 	interval     time.Duration
@@ -28,13 +27,13 @@ type Server struct {
 }
 
 // NewMailServer returns a new instance of a mail server.
-func NewMailServer(config Config, logger zerolog.Logger, sc *scanner.Scanner, advisor *domainAdvisor.Advisor) (*Server, error) {
+func NewMailServer(config Config, logger zerolog.Logger, sc *scanner.Scanner, giveAdvice bool) (*Server, error) {
 	s := Server{
-		advisor:  advisor,
-		config:   config,
-		cooldown: cache.New[string](1 * time.Minute),
-		logger:   logger,
-		Scanner:  sc,
+		giveAdvice: giveAdvice,
+		config:     config,
+		cooldown:   cache.New[string](1 * time.Minute),
+		logger:     logger,
+		Scanner:    sc,
 	}
 
 	client, err := s.Login()
@@ -112,9 +111,8 @@ func (s *Server) handler() error {
 				resultWithAdvice := model.ScanResultWithAdvice{
 					ScanResult: result,
 				}
-
-				if s.advisor != nil || result.Error != scanner.ErrInvalidDomain {
-					resultWithAdvice.Advice = s.advisor.CheckAll(result.Domain, result.BIMI, result.DKIM, result.DMARC, result.MX, result.SPF)
+				if s.giveAdvice || result.Error != scanner.ErrInvalidDomain {
+					resultWithAdvice.Advice = s.Scanner.CheckAll(result.Domain, result.BIMI, result.DKIM, result.DMARC, result.MX, result.SPF, result.STS, result.STSPolicy, result.DNSSEC)
 				}
 
 				if err = s.SendMail(sender, resultWithAdvice); err != nil {

@@ -64,21 +64,22 @@ var (
 		},
 	}
 
-	cfg                                          *Config
-	log                                          zerolog.Logger
-	writeToFileCounter                           int
-	dnsProtocol, format, outputFile              string
-	dkimSelector, nameservers                    []string
-	advise, debug, checkTLS, prettyLog, zoneFile bool
-	dnsBuffer                                    uint16
-	cache, timeout                               time.Duration
-	concurrent                                   uint16
+	cfg                                                      *Config
+	log                                                      zerolog.Logger
+	writeToFileCounter                                       int
+	dnsProtocol, format, outputFile                          string
+	dkimSelector, nameservers                                []string
+	advise, debug, checkTLS, prettyLog, zoneFile, scanDNSSEC bool
+	dnsBuffer                                                uint16
+	cache, timeout                                           time.Duration
+	concurrent                                               uint16
 )
 
 func main() {
 	cmd.PersistentFlags().BoolVarP(&advise, "advise", "a", false, "Provide suggestions for incorrect/missing mail security features")
 	cmd.PersistentFlags().DurationVar(&cache, "cache", 3*time.Minute, "Specify how long to cache results for")
 	cmd.PersistentFlags().BoolVar(&checkTLS, "checkTLS", false, "Check the TLS connectivity and cert validity of domains")
+	cmd.PersistentFlags().BoolVar(&scanDNSSEC, "dnssec", false, "Include scan for DNSSEC records")
 	cmd.PersistentFlags().Uint16VarP(&concurrent, "concurrent", "c", uint16(runtime.NumCPU()), "The number of domains to scan concurrently")
 	cmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "Print debug logs")
 	cmd.PersistentFlags().StringSliceVar(&dkimSelector, "dkimSelector", []string{}, "Specify a DKIM selector")

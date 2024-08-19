@@ -3,7 +3,6 @@ package main
 import (
 	"time"
 
-	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/advisor"
 	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/http"
 	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/mail"
 	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/scanner"
@@ -53,6 +52,8 @@ var (
 				scanner.WithDNSBuffer(dnsBuffer),
 				scanner.WithDNSProtocol(dnsProtocol),
 				scanner.WithNameservers(nameservers),
+				scanner.WithCheckTLS(checkTLS),
+				scanner.WithScanDNSSEC(scanDNSSEC),
 			}
 
 			if len(dkimSelector) > 0 {
@@ -65,9 +66,6 @@ var (
 			}
 
 			server := http.NewServer(log, timeout, cmd.Version)
-			if advise {
-				server.Advisor = advisor.NewAdvisor(timeout, cache, checkTLS)
-			}
 			server.CheckTLS = checkTLS
 			server.Scanner = sc
 
@@ -85,6 +83,7 @@ var (
 				scanner.WithDNSBuffer(dnsBuffer),
 				scanner.WithDNSProtocol(dnsProtocol),
 				scanner.WithNameservers(nameservers),
+				scanner.WithCheckTLS(checkTLS),
 			}
 
 			if len(dkimSelector) > 0 {
@@ -96,7 +95,7 @@ var (
 				log.Fatal().Err(err).Msg("could not create domain scanner")
 			}
 
-			mailServer, err := mail.NewMailServer(mailConfig, log, sc, advisor.NewAdvisor(timeout, cache, checkTLS))
+			mailServer, err := mail.NewMailServer(mailConfig, log, sc, advise)
 			if err != nil {
 				log.Fatal().Err(err).Msg("could not open mail server connection")
 			}

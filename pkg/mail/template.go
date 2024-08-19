@@ -7,8 +7,8 @@ import (
 	htmlTmpl "html/template"
 	textTmpl "text/template"
 
-	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/advisor"
 	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/model"
+	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/scanner"
 )
 
 var (
@@ -50,7 +50,7 @@ func (s *Server) getMailContents(result model.ScanResultWithAdvice) (string, str
 	var htmlBytes, textBytes bytes.Buffer
 
 	if result.Advice == nil {
-		result.Advice = &advisor.Advice{}
+		result.Advice = &scanner.Advice{}
 	}
 
 	mailData := struct {
@@ -73,7 +73,7 @@ func (s *Server) getMailContents(result model.ScanResultWithAdvice) (string, str
 
 	// prevent template errors
 	if result.Advice == nil {
-		result.Advice = &advisor.Advice{}
+		result.Advice = &scanner.Advice{}
 	}
 
 	if err := s.templateHTML.Execute(&htmlBytes, mailData); err != nil {

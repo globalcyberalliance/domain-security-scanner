@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	//	"github.com/miekg/dns"
 	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/dns"
 )
 
@@ -143,6 +142,7 @@ func validateDKIMSelector(selector string) error {
 	return nil
 }
 
+// Scan DNSSEC records if true.
 func WithScanDNSSEC(scanDNSSEC bool) Option {
 	return func(s *Scanner) error {
 		s.scanDNSSEC = scanDNSSEC
