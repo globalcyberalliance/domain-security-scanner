@@ -1,4 +1,4 @@
-package advisor
+package scanner
 
 import (
 	"crypto/tls"
@@ -18,6 +18,8 @@ import (
 var emailRegex = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 
 type (
+
+	// Advisor config options.
 	Advisor struct {
 		consumerDomains      map[string]struct{}
 		consumerDomainsMutex *sync.Mutex
@@ -34,6 +36,8 @@ type (
 		DMARC  []string `json:"dmarc,omitempty" yaml:"dmarc,omitempty" doc:"DMARC advice." example:"You are currently at the lowest level and receiving reports, which is a great starting point. Please make sure to review the reports, make the appropriate adjustments, and move to either quarantine or reject soon."`
 		MX     []string `json:"mx,omitempty" yaml:"mx,omitempty" doc:"MX advice." example:"You have a multiple mail servers setup! No further action needed."`
 		SPF    []string `json:"spf,omitempty" yaml:"spf,omitempty" doc:"SPF advice." example:"SPF seems to be setup correctly! No further action needed."`
+		STS    []string `json:"mta-sts,omitempty" yaml:"mta-sts,omitempty" doc:"MTA-STS advice." example:"MTA-STS seems to be setup correctly! No further action needed."`
+		DNSSEC []string `json:"dnssec,omitempty" yaml:"dnssec,omitempty" doc:"DNSSEC advice." example:"DNSSEC seems to be setup correctly! No further action needed."`
 	}
 
 	// dmarc represents the structure of a DMARC record.
@@ -52,9 +56,8 @@ type (
 	}
 )
 
-func NewAdvisor(timeout time.Duration, cacheLifetime time.Duration, checkTLS bool) *Advisor {
+func NewAdvisor(timeout time.Duration, cacheLifetime time.Duration) *Advisor {
 	advisor := Advisor{
-		checkTLS:             checkTLS,
 		consumerDomains:      make(map[string]struct{}),
 		consumerDomainsMutex: &sync.Mutex{},
 		dialer:               &net.Dialer{Timeout: timeout},
@@ -69,38 +72,48 @@ func NewAdvisor(timeout time.Duration, cacheLifetime time.Duration, checkTLS boo
 	return &advisor
 }
 
-func (a *Advisor) CheckAll(domain, bimi, dkim, dmarc string, mx []string, spf string) *Advice {
+func (s *Scanner) CheckAll(domain, bimi, dkim, dmarc string, mx []string, spf string, sts string, stsPolicy string, dnssec string) *Advice {
 	advice := &Advice{}
 	var wg sync.WaitGroup
 
-	wg.Add(6)
+	wg.Add(8)
 	go func() {
-		advice.Domain = a.CheckDomain(domain)
+		advice.Domain = s.CheckDomain(domain)
 		wg.Done()
 	}()
 
 	go func() {
-		advice.BIMI = a.CheckBIMI(bimi)
+		advice.BIMI = s.CheckBIMI(bimi)
 		wg.Done()
 	}()
 
 	go func() {
-		advice.DKIM = a.CheckDKIM(dkim)
+		advice.DKIM = s.CheckDKIM(dkim)
 		wg.Done()
 	}()
 
 	go func() {
-		advice.DMARC = a.CheckDMARC(dmarc)
+		advice.DMARC = s.CheckDMARC(dmarc)
 		wg.Done()
 	}()
 
 	go func() {
-		advice.MX = a.CheckMX(mx)
+		advice.MX = s.CheckMX(mx)
 		wg.Done()
 	}()
 
 	go func() {
-		advice.SPF = a.CheckSPF(spf)
+		advice.SPF = s.CheckSPF(spf)
+		wg.Done()
+	}()
+
+	go func() {
+		advice.STS = s.CheckSTS(sts, stsPolicy)
+		wg.Done()
+	}()
+
+	go func() {
+		advice.DNSSEC = s.CheckDNSSEC(dnssec)
 		wg.Done()
 	}()
 
@@ -109,7 +122,7 @@ func (a *Advisor) CheckAll(domain, bimi, dkim, dmarc string, mx []string, spf st
 	return advice
 }
 
-func (a *Advisor) CheckBIMI(bimi string) (advice []string) {
+func (s *Scanner) CheckBIMI(bimi string) (advice []string) {
 	if len(bimi) == 0 {
 		return []string{"We couldn't detect any active BIMI record for your domain. Please visit https://dmarcguide.globalcyberalliance.org to fix this."}
 	}
@@ -187,7 +200,7 @@ func (a *Advisor) CheckBIMI(bimi string) (advice []string) {
 	return advice
 }
 
-func (a *Advisor) CheckDKIM(dkim string) (advice []string) {
+func (s *Scanner) CheckDKIM(dkim string) (advice []string) {
 	if dkim == "" {
 		return []string{"We couldn't detect any active DKIM record for your domain. Due to how DKIM works, we only lookup common/known DKIM selectors (such as x, selector1, google). Visit https://dmarcguide.globalcyberalliance.org for more info on how to configure DKIM for your domain."}
 	}
@@ -224,7 +237,7 @@ func (a *Advisor) CheckDKIM(dkim string) (advice []string) {
 	return advice
 }
 
-func (a *Advisor) CheckDMARC(record string) (advice []string) {
+func (s *Scanner) CheckDMARC(record string) (advice []string) {
 	if record == "" {
 		return []string{"You do not have DMARC setup!"}
 	}
@@ -236,6 +249,7 @@ func (a *Advisor) CheckDMARC(record string) (advice []string) {
 	dmarcRecord := dmarc{}
 	parts := strings.Split(record, ";")
 	ruaExists := strings.Contains(record, "rua=")
+	var vFound, pFound bool
 
 	for index, part := range parts {
 		keyValue := strings.SplitN(strings.TrimSpace(part), "=", 2)
@@ -248,12 +262,14 @@ func (a *Advisor) CheckDMARC(record string) (advice []string) {
 
 		switch key {
 		case "v":
+			vFound = true
 			if index != 0 || value != "DMARC1" {
 				dmarcRecord.Advice = append(dmarcRecord.Advice, "The beginning of your DMARC record should be v=DMARC1 with specific capitalization.")
 			}
 
 			dmarcRecord.Version = value
 		case "p":
+			pFound = true
 			if index != 1 {
 				dmarcRecord.Advice = append(dmarcRecord.Advice, "The second tag in your DMARC record must be p=none/p=quarantine/p=reject.")
 			}
@@ -324,8 +340,16 @@ func (a *Advisor) CheckDMARC(record string) (advice []string) {
 				dmarcRecord.Advice = append(dmarcRecord.Advice, "Invalid failure options specified, the record must be fo=0/fo=1/fo=d/fo=s.")
 			}
 		case "aspf":
+			if value != "r" && value != "s" {
+				dmarcRecord.Advice = append(dmarcRecord.Advice, "aspf value is invalid, must be 'r' or 's'")
+			}
+
 			dmarcRecord.ASPF = value
 		case "adkim":
+			if value != "r" && value != "s" {
+				dmarcRecord.Advice = append(dmarcRecord.Advice, "adkim value is invalid, must be 'r' or 's'")
+			}
+
 			dmarcRecord.ADKIM = value
 		case "ri":
 			ri, err := strconv.Atoi(value)
@@ -339,6 +363,14 @@ func (a *Advisor) CheckDMARC(record string) (advice []string) {
 
 			dmarcRecord.ReportInterval = ri
 		}
+	}
+
+	if !vFound {
+		dmarcRecord.Advice = append(dmarcRecord.Advice, "The first tag in your DMARC record should be v=DMARC1")
+	}
+
+	if !pFound {
+		dmarcRecord.Advice = append(dmarcRecord.Advice, "No DMARC policy found, record must contain p=none/p=quarantine/p=reject")
 	}
 
 	if len(dmarcRecord.AggregateReportDestination) == 0 {
@@ -360,16 +392,23 @@ func (a *Advisor) CheckDMARC(record string) (advice []string) {
 	return dmarcRecord.Advice
 }
 
-func (a *Advisor) CheckDomain(domain string) (advice []string) {
-	a.consumerDomainsMutex.Lock()
-	if _, ok := a.consumerDomains[domain]; ok {
-		a.consumerDomainsMutex.Unlock()
+func (s *Scanner) CheckDNSSEC(dnssec string) (advice []string) {
+	if dnssec == "" {
+		return []string{"We couldn't detect any active DNSSEC record for your domain."}
+	}
+	return []string{"DNSSEC seems to be setup correctly! No further action needed."}
+}
+
+func (s *Scanner) CheckDomain(domain string) (advice []string) {
+	s.advisor.consumerDomainsMutex.Lock()
+	if _, ok := s.advisor.consumerDomains[domain]; ok {
+		s.advisor.consumerDomainsMutex.Unlock()
 		return []string{"Consumer based accounts (i.e gmail.com, yahoo.com, etc) are controlled by the vendor. They are responsible for setting DKIM, SPF and DMARC capabilities on their domains."}
 	}
-	a.consumerDomainsMutex.Unlock()
+	s.advisor.consumerDomainsMutex.Unlock()
 
-	if a.checkTLS {
-		advice = append(advice, a.checkHostTLS(domain, 443)...)
+	if s.advisor.checkTLS {
+		advice = append(advice, s.checkHostTLS(domain, 443)...)
 	}
 
 	if len(advice) == 0 {
@@ -379,7 +418,7 @@ func (a *Advisor) CheckDomain(domain string) (advice []string) {
 	return advice
 }
 
-func (a *Advisor) CheckMX(mx []string) (advice []string) {
+func (s *Scanner) CheckMX(mx []string) (advice []string) {
 	switch len(mx) {
 	case 0:
 		return []string{"You do not have any mail servers setup, so you cannot receive email at this domain."}
@@ -389,10 +428,10 @@ func (a *Advisor) CheckMX(mx []string) (advice []string) {
 		advice = []string{"You have multiple mail servers setup, which is recommended."}
 	}
 
-	if a.checkTLS {
+	if s.advisor.checkTLS {
 		for _, serverAddress := range mx {
 			// prepend the hostname to the advice line
-			mxAdvice := a.checkMailTls(serverAddress)
+			mxAdvice := s.checkMailTls(serverAddress)
 			for _, serverAdvice := range mxAdvice {
 				// strip the trailing dot from DNS records
 				advice = append(advice, serverAddress[:len(serverAddress)-1]+": "+serverAdvice)
@@ -422,44 +461,68 @@ func (a *Advisor) CheckMX(mx []string) (advice []string) {
 	return advice
 }
 
-func (a *Advisor) CheckSPF(spf string) []string {
+func (s *Scanner) CheckSPF(spf string) []string {
 	if spf == "" {
 		return []string{"We couldn't detect any active SPF record for your domain. Please visit https://dmarcguide.globalcyberalliance.org to fix this."}
 	}
 
-	if strings.Contains(spf, "all") {
-		if strings.Contains(spf, "+all") {
-			return []string{"Your SPF record contains the +all tag. It is strongly recommended that this be changed to either -all or ~all. The +all tag allows for any system regardless of SPF to send mail on the organization’s behalf."}
-		}
-	} else {
-		return []string{"Your SPF record is missing the all tag. Please visit https://dmarcguide.globalcyberalliance.org to fix this."}
+	var advice []string
+
+	if !strings.HasPrefix(spf, "v=spf1") {
+		advice = append(advice, "Your SPF record should begin with v=spf1")
 	}
 
-	return []string{"SPF seems to be setup correctly! No further action needed."}
+	lookupCount := 0
+	lookupError := s.checkSPFLookup(spf, []string{}, &lookupCount)
+	if lookupError != "" {
+		advice = append(advice, lookupError)
+	}
+
+	if lookupCount > 10 {
+		advice = append(advice, "SPF record contains "+strconv.Itoa(lookupCount)+" DNS lookups, which is more than 10 lookup limit. your SPF record check will fail, consider using 'ip4' and 'ip6' mechanisms instead.")
+	}
+
+	if strings.Contains(spf, "ptr") {
+		advice = append(advice, "The 'ptr' mechanism is deprecated, and is unreliable. It is strongly recommended that it not be used.")
+	}
+
+	if strings.Contains(spf, "all") {
+		if strings.Contains(spf, "+all") {
+			advice = append(advice, "Your SPF record contains the +all tag. It is strongly recommended that this be changed to either -all or ~all. The +all tag allows for any system regardless of SPF to send mail on the organization’s behalf.")
+		}
+	} else {
+		advice = append(advice, "Your SPF record is missing the all tag. Please visit https://dmarcguide.globalcyberalliance.org to fix this.")
+	}
+
+	if len(advice) == 0 {
+		advice = append(advice, "SPF seems to be setup correctly! No further action needed.")
+	}
+
+	return advice
 }
 
-func (a *Advisor) checkHostTLS(hostname string, port int) (advice []string) {
+func (s *Scanner) checkHostTLS(hostname string, port int) (advice []string) {
 	// strip the trailing dot from DNS records
 	if string(hostname[len(hostname)-1]) == "." {
 		hostname = hostname[:len(hostname)-1]
 	}
 
 	// check if the advice is already in the cache
-	tlsAdvice := a.tlsCacheHost.Get(hostname)
+	tlsAdvice := s.advisor.tlsCacheHost.Get(hostname)
 	if tlsAdvice != nil {
 		return *tlsAdvice
 	}
 
 	// set the advice in the cache after the function returns
 	defer func() {
-		a.tlsCacheHost.Set(hostname, &advice)
+		s.advisor.tlsCacheHost.Set(hostname, &advice)
 	}()
 
 	if port == 0 {
 		port = 443
 	}
 
-	conn, err := tls.DialWithDialer(a.dialer, "tcp", hostname+":"+cast.ToString(port), nil)
+	conn, err := tls.DialWithDialer(s.advisor.dialer, "tcp", hostname+":"+cast.ToString(port), nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "no such host") {
 			// fill variable to satisfy deferred cache fill
@@ -470,7 +533,7 @@ func (a *Advisor) checkHostTLS(hostname string, port int) (advice []string) {
 		if strings.Contains(err.Error(), "certificate is not trusted") || strings.Contains(err.Error(), "failed to verify certificate") {
 			advice = append(advice, "No valid certificate could be found.")
 
-			conn, err = tls.DialWithDialer(a.dialer, "tcp", hostname+":"+cast.ToString(port), &tls.Config{InsecureSkipVerify: true})
+			conn, err = tls.DialWithDialer(s.advisor.dialer, "tcp", hostname+":"+cast.ToString(port), &tls.Config{InsecureSkipVerify: true})
 			if err != nil {
 				return advice
 			}
@@ -485,24 +548,24 @@ func (a *Advisor) checkHostTLS(hostname string, port int) (advice []string) {
 	return advice
 }
 
-func (a *Advisor) checkMailTls(hostname string) (advice []string) {
+func (s *Scanner) checkMailTls(hostname string) (advice []string) {
 	// strip the trailing dot from DNS records
 	if string(hostname[len(hostname)-1]) == "." {
 		hostname = hostname[:len(hostname)-1]
 	}
 
 	// check if the advice is already in the cache
-	tlsAdvice := a.tlsCacheMail.Get(hostname)
+	tlsAdvice := s.advisor.tlsCacheMail.Get(hostname)
 	if tlsAdvice != nil {
 		return *tlsAdvice
 	}
 
 	// set the advice in the cache after the function returns
 	defer func() {
-		a.tlsCacheMail.Set(hostname, &advice)
+		s.advisor.tlsCacheMail.Set(hostname, &advice)
 	}()
 
-	conn, err := a.dialer.Dial("tcp", hostname+":25")
+	conn, err := s.advisor.dialer.Dial("tcp", hostname+":25")
 	if err != nil {
 		// fill variable to satisfy deferred cache fill
 		if strings.Contains(err.Error(), "i/o timeout") {
@@ -538,7 +601,7 @@ func (a *Advisor) checkMailTls(hostname string) (advice []string) {
 				return advice
 			}
 
-			conn, err = a.dialer.Dial("tcp", hostname+"25")
+			conn, err = s.advisor.dialer.Dial("tcp", hostname+"25")
 			if err != nil {
 				// fill variable to satisfy deferred cache fill
 				advice = []string{"Failed to reach domain"}
@@ -572,6 +635,116 @@ func (a *Advisor) checkMailTls(hostname string) (advice []string) {
 	}
 
 	return advice
+}
+
+func (s *Scanner) CheckSTS(record string, policy string) (advice []string) {
+	if record == "" {
+		return []string{"You do not have MTA-STS setup!"}
+	}
+
+	if !strings.HasPrefix(record, "v=STSv1") {
+		advice = append(advice, "The beginning of your MTA-STS record should be v=STSv1 with specific capitalization.")
+	}
+
+	if !strings.Contains(record, "id=") {
+		advice = append(advice, "The MTA-STS record should contain an 'id' tag.")
+	}
+
+	if policy == "" {
+		advice = append(advice, "The MTA-STS policy is missing.")
+		return advice
+	}
+	lines := strings.Split(policy, "\n")
+	requiredFields := []string{"version:", "mode:", "mx:", "max_age:"}
+	for _, field := range requiredFields {
+		found := false
+		for _, line := range lines {
+			if strings.HasPrefix(line, field) {
+				found = true
+				if field == "mode:" {
+					value, _ := strings.CutPrefix(line, field)
+					value = strings.TrimSpace(value)
+					switch value {
+					case "enforce":
+						break
+					case "testing":
+						advice = append(advice, "The MTA-STS policy is in testing mode. This means that the policy will not be enforced.")
+					case "none":
+						advice = append(advice, "The MTA-STS policy is in none mode. This means that the policy will not be used.")
+					default:
+						advice = append(advice, "The MTA-STS policy mode is invalid. It should be either enforce, testing or none.")
+					}
+				}
+			}
+		}
+		if !found {
+			advice = append(advice, "The MTA-STS policy is missing the "+field+" field.")
+		}
+	}
+
+	if len(advice) == 0 {
+		return []string{"MTA-STS seems to be setup correctly! No further action needed."}
+	}
+	return advice
+}
+
+func (s *Scanner) checkSPFLookup(spf string, lookupParents []string, lookupCount *int) string {
+	// get DNS lookups from record
+	parts := strings.Split(spf, " ")
+	for _, part := range parts {
+		var keyValue []string
+
+		if strings.Contains(part, ":") {
+			keyValue = strings.Split(part, ":")
+		} else {
+			keyValue = strings.Split(part, "=")
+		}
+
+		key := strings.ToLower(keyValue[0])
+
+		switch key {
+		case "a",
+			"mx",
+			"ptr",
+			"exists",
+			"redirect":
+			*lookupCount++
+
+		case "include":
+			*lookupCount++
+
+			value := keyValue[1]
+			for _, parent := range lookupParents {
+				if parent == value {
+					return "SPF record contains cyclid lookup chain begining at" + key + "."
+				}
+			}
+
+			// get spf record of target
+			// txtRecords, err := net.LookupTXT(value)
+			newSPF, err := s.dnsClient.GetTypeSPF(value)
+			if err != nil {
+				return "Error when accessing SPF record for " + value + "."
+			}
+			if spf == "" {
+				return "Could not find required SPF record at " + value + "."
+			}
+
+			// var newSPF string
+			// for index, record := range txtRecords {
+			//	if strings.HasPrefix(record, "v=spf1") {
+			//		newSPF = txtRecords[index]
+			//		break
+			//	}
+			// }
+
+			lookupError := s.checkSPFLookup(newSPF, append(lookupParents, value), lookupCount)
+			if lookupError != "" {
+				return lookupError
+			}
+		}
+	}
+	return ""
 }
 
 func checkTLSVersion(tlsVersion uint16) string {

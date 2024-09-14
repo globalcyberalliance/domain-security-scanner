@@ -6,7 +6,6 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/advisor"
 	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/scanner"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
@@ -30,7 +29,7 @@ type Server struct {
 	CheckTLS bool
 
 	// Services used by the various HTTP routes
-	Advisor *advisor.Advisor
+	Advisor *scanner.Advisor
 	Scanner *scanner.Scanner
 }
 

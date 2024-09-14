@@ -1,4 +1,4 @@
-package advisor
+package scanner
 
 var consumerDomainList = []string{
 	"126.com",

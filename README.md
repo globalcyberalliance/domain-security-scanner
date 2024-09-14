@@ -218,6 +218,7 @@ You can then email this inbox from any address, and you'll receive an email back
 | `--advise`       | `-a`  | Provide suggestions for incorrect/missing mail security features                                                |
 | `--cache`        |       | Specify how long to cache results for (default 3m)                                                              |
 | `--checkTLS`     |       | Check the TLS connectivity and cert validity of domains                                                         |
+| `--dnssec`       |       | Include scan for DNSSEC records                                                                                 |
 | `--concurrent`   | `-c`  | The number of domains to scan concurrently (defaults to your number of CPU threads)                             |
 | `--debug`        | `-d`  | Print debug logs                                                                                                |
 | `--dkimSelector` |       | Specify a comma seperated list of DKIM selectors (default "")                                                   |
