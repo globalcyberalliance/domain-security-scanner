@@ -195,20 +195,3 @@ func TestOptionWithNameservers(t *testing.T) {
 		require.Equal(t, []string{"[2001:4860:4860::8888]:53"}, scanner.dnsClient.Nameservers)
 	})
 }
-
-func TestOptionWithScanDNSSEC(t *testing.T) {
-	logger := zerolog.Nop()
-	timeout := time.Second * 5
-
-	t.Run("ScanDNSSEC", func(t *testing.T) {
-		scanner, err := New(logger, timeout, WithScanDNSSEC(true))
-		require.NoError(t, err)
-		require.True(t, scanner.scanDNSSEC)
-	})
-
-	t.Run("DoNotScanDNSSEC", func(t *testing.T) {
-		scanner, err := New(logger, timeout, WithScanDNSSEC(false))
-		require.NoError(t, err)
-		require.False(t, scanner.scanDNSSEC)
-	})
-}

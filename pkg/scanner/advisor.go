@@ -113,9 +113,7 @@ func (s *Scanner) CheckAll(domain, bimi, dkim, dmarc string, mx []string, spf st
 	}()
 
 	go func() {
-		if s.scanDNSSEC {
-			advice.DNSSEC = s.CheckDNSSEC(dnssec)
-		}
+		advice.DNSSEC = s.CheckDNSSEC(dnssec)
 		wg.Done()
 	}()
 
@@ -394,6 +392,13 @@ func (s *Scanner) CheckDMARC(record string) (advice []string) {
 	return dmarcRecord.Advice
 }
 
+func (s *Scanner) CheckDNSSEC(dnssec string) (advice []string) {
+	if dnssec == "" {
+		return []string{"We couldn't detect any active DNSSEC record for your domain."}
+	}
+	return []string{"DNSSEC seems to be setup correctly! No further action needed."}
+}
+
 func (s *Scanner) CheckDomain(domain string) (advice []string) {
 	s.advisor.consumerDomainsMutex.Lock()
 	if _, ok := s.advisor.consumerDomains[domain]; ok {
@@ -634,8 +639,7 @@ func (s *Scanner) checkMailTls(hostname string) (advice []string) {
 
 func (s *Scanner) CheckSTS(record string, policy string) (advice []string) {
 	if record == "" {
-		advice = []string{"mta-sts is not set up."}
-		return advice
+		return []string{"You do not have MTA-STS setup!"}
 	}
 
 	if !strings.HasPrefix(record, "v=STSv1") {
@@ -684,16 +688,6 @@ func (s *Scanner) CheckSTS(record string, policy string) (advice []string) {
 	return advice
 }
 
-/*
-placeholder function for DNSSEC checking
-*/
-func (s *Scanner) CheckDNSSEC(dnssec string) (advice []string) {
-	if dnssec == "" {
-		return []string{"We couldn't detect any active DNSSEC record for your domain."}
-	}
-	return advice
-}
-
 func (s *Scanner) checkSPFLookup(spf string, lookupParents []string, lookupCount *int) string {
 	// get DNS lookups from record
 	parts := strings.Split(spf, " ")
@@ -736,13 +730,13 @@ func (s *Scanner) checkSPFLookup(spf string, lookupParents []string, lookupCount
 				return "Could not find required SPF record at " + value + "."
 			}
 
-			//var newSPF string
-			//for index, record := range txtRecords {
+			// var newSPF string
+			// for index, record := range txtRecords {
 			//	if strings.HasPrefix(record, "v=spf1") {
 			//		newSPF = txtRecords[index]
 			//		break
 			//	}
-			//}
+			// }
 
 			lookupError := s.checkSPFLookup(newSPF, append(lookupParents, value), lookupCount)
 			if lookupError != "" {

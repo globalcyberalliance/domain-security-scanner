@@ -44,9 +44,6 @@ type (
 		poolSize uint16
 
 		advisor *Advisor
-
-		// scanDNSSEC is a flag to enable DNSSEC scanning.
-		scanDNSSEC bool
 	}
 
 	// Option defines a functional configuration type for a *Scanner.
@@ -59,12 +56,12 @@ type (
 		BIMI      string   `json:"bimi,omitempty" yaml:"bimi,omitempty" doc:"The BIMI record for the domain." example:"https://example.com/bimi.svg"`
 		DKIM      string   `json:"dkim,omitempty" yaml:"dkim,omitempty" doc:"The DKIM record for the domain." example:"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA"`
 		DMARC     string   `json:"dmarc,omitempty" yaml:"dmarc,omitempty" doc:"The DMARC record for the domain." example:"v=DMARC1; p=none"`
+		DNSSEC    string   `json:"dnssec,omitempty" yaml:"dnssec,omitempty" doc:"The DNSSEC records for the domain." example:""` // TODO: add example
 		MX        []string `json:"mx,omitempty" yaml:"mx,omitempty" doc:"The MX records for the domain." example:"aspmx.l.google.com"`
 		NS        []string `json:"ns,omitempty" yaml:"ns,omitempty" doc:"The NS records for the domain." example:"ns1.example.com"`
 		SPF       string   `json:"spf,omitempty" yaml:"spf,omitempty" doc:"The SPF record for the domain." example:"v=spf1 include:_spf.google.com ~all"`
 		STS       string   `json:"mta-sts,omitempty" yaml:"mta-sts,omitempty" doc:"The MTA-STS record for the domain." example:"v=STSv1; id=20210803T010200;"`
 		STSPolicy string   `json:"mta-sts-policy,omitempty" yaml:"mta-sts-policy,omitempty" doc:"The MTA-STS policy for the domain." example:"version: STSv1\nmode: enforce\nmx: mail.example.com\nmx: *.example.net\nmax_age: 86400\n"`
-		DNSSEC    string   `json:"dnssec,omitempty" yaml:"dnssec,omitempty" doc:"The DNSSEC record for the domain." example:"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA"`
 	}
 )
 
@@ -181,7 +178,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 			scanWg := sync.WaitGroup{}
 			scanWg.Add(7)
 
-			// Get BIMI record
+			// Get BIMI record.
 			go func() {
 				defer scanWg.Done()
 				result.BIMI, err = s.dnsClient.GetTypeBIMI(domainToScan)
@@ -190,7 +187,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 				}
 			}()
 
-			// Get DKIM record
+			// Get DKIM record.
 			go func() {
 				defer scanWg.Done()
 				result.DKIM, err = s.dnsClient.GetTypeDKIM(domainToScan)
@@ -208,7 +205,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 				}
 			}()
 
-			// Get MX records
+			// Get MX records.
 			go func() {
 				defer scanWg.Done()
 				result.MX, err = s.dnsClient.GetTypeMX(domainToScan)
@@ -217,7 +214,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 				}
 			}()
 
-			// Get SPF record
+			// Get SPF record.
 			go func() {
 				defer scanWg.Done()
 				result.SPF, err = s.dnsClient.GetTypeSPF(domainToScan)
@@ -226,7 +223,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 				}
 			}()
 
-			// Get MTA-STS record
+			// Get MTA-STS record.
 			go func() {
 				defer scanWg.Done()
 				result.STS, result.STSPolicy, err = s.dnsClient.GetTypeSTS(domainToScan)
@@ -235,13 +232,12 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 				}
 			}()
 
+			// Get DNSSEC records.
 			go func() {
 				defer scanWg.Done()
-				if s.scanDNSSEC {
-					result.DNSSEC, err = s.dnsClient.GetTypeDNSSEC(domainToScan)
-					if err != nil {
-						errs = append(errs, "dnssec:"+err.Error())
-					}
+				result.DNSSEC, err = s.dnsClient.GetTypeDNSSEC(domainToScan)
+				if err != nil {
+					errs = append(errs, "dnssec:"+err.Error())
 				}
 			}()
 

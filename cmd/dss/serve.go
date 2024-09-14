@@ -53,7 +53,6 @@ var (
 				scanner.WithDNSProtocol(dnsProtocol),
 				scanner.WithNameservers(nameservers),
 				scanner.WithCheckTLS(checkTLS),
-				scanner.WithScanDNSSEC(scanDNSSEC),
 			}
 
 			if len(dkimSelector) > 0 {
