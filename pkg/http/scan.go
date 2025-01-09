@@ -53,7 +53,7 @@ func (s *Server) registerScanRoutes() {
 		}
 
 		if s.Advisor != nil {
-			result.Advice = s.Scanner.CheckAll(result.ScanResult.Domain, result.ScanResult.BIMI, result.ScanResult.DKIM, result.ScanResult.DMARC, result.ScanResult.MX, result.ScanResult.SPF, result.ScanResult.STS, result.ScanResult.STSPolicy, result.ScanResult.DNSSEC)
+			result.Advice = s.Scanner.CheckAll(result.ScanResult.Domain, result.ScanResult.BIMI, result.ScanResult.DKIM, result.ScanResult.DMARC, result.ScanResult.DNSSEC, result.ScanResult.MX, result.ScanResult.SPF, result.ScanResult.STS, result.ScanResult.STSPolicy)
 		}
 
 		resp.Body.ScanResultWithAdvice = result
@@ -98,7 +98,7 @@ func (s *Server) registerScanRoutes() {
 			}
 
 			if s.Advisor != nil && result.Error != scanner.ErrInvalidDomain {
-				res.Advice = s.Scanner.CheckAll(result.Domain, result.BIMI, result.DKIM, result.DMARC, result.MX, result.SPF, result.STS, result.STSPolicy, result.DNSSEC)
+				res.Advice = s.Scanner.CheckAll(result.Domain, result.BIMI, result.DKIM, result.DMARC, result.DNSSEC, result.MX, result.SPF, result.STS, result.STSPolicy)
 			}
 
 			resp.Body.Results = append(resp.Body.Results, res)

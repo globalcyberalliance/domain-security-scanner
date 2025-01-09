@@ -112,7 +112,7 @@ func (s *Server) handler() error {
 					ScanResult: result,
 				}
 				if s.giveAdvice || result.Error != scanner.ErrInvalidDomain {
-					resultWithAdvice.Advice = s.Scanner.CheckAll(result.Domain, result.BIMI, result.DKIM, result.DMARC, result.MX, result.SPF, result.STS, result.STSPolicy, result.DNSSEC)
+					resultWithAdvice.Advice = s.Scanner.CheckAll(result.Domain, result.BIMI, result.DKIM, result.DMARC, result.DNSSEC, result.MX, result.SPF, result.STS, result.STSPolicy)
 				}
 
 				if err = s.SendMail(sender, resultWithAdvice); err != nil {

@@ -33,7 +33,7 @@ type (
 		BIMI   []string `json:"bimi,omitempty" yaml:"bimi,omitempty" doc:"BIMI advice." example:"Your BIMI record looks good! No further action needed."`
 		DKIM   []string `json:"dkim,omitempty" yaml:"dkim,omitempty" doc:"DKIM advice." example:"DKIM is setup for this email server. However, if you have other 3rd party systems, please send a test email to confirm DKIM is setup properly."`
 		DMARC  []string `json:"dmarc,omitempty" yaml:"dmarc,omitempty" doc:"DMARC advice." example:"You are currently at the lowest level and receiving reports, which is a great starting point. Please make sure to review the reports, make the appropriate adjustments, and move to either quarantine or reject soon."`
-		MTASTS []string `json:"mta-sts,omitempty" yaml:"mta-sts,omitempty" doc:"MTA-MTASTS advice." example:"MTA-MTASTS seems to be setup correctly! No further action needed."`
+		MTASTS []string `json:"mta-sts,omitempty" yaml:"mta-sts,omitempty" doc:"MTA-STS advice." example:"MTA-STS seems to be setup correctly! No further action needed."`
 		MX     []string `json:"mx,omitempty" yaml:"mx,omitempty" doc:"MX advice." example:"You have a multiple mail servers setup! No further action needed."`
 		SPF    []string `json:"spf,omitempty" yaml:"spf,omitempty" doc:"SPF advice." example:"SPF seems to be setup correctly! No further action needed."`
 		DNSSEC []string `json:"dnssec,omitempty" yaml:"dnssec,omitempty" doc:"DNSSEC advice." example:"DNSSEC seems to be setup correctly! No further action needed."`
@@ -480,11 +480,11 @@ func (s *Scanner) CheckSPF(spf string) []string {
 	}
 
 	if lookupCount > 10 {
-		advice = append(advice, "SPF record contains "+strconv.Itoa(lookupCount)+" DNS lookups, which is more than 10 lookup limit. your SPF record check will fail, consider using 'ip4' and 'ip6' mechanisms instead.")
+		advice = append(advice, "Your SPF record contains "+strconv.Itoa(lookupCount)+" DNS lookups, which is more than the 10 lookup limit. Your SPF record check will fail, consider using 'ip4' and 'ip6' mechanisms instead.")
 	}
 
 	if strings.Contains(spf, "ptr") {
-		advice = append(advice, "The 'ptr' mechanism is deprecated, and is unreliable. It is strongly recommended that it not be used.")
+		advice = append(advice, "The 'ptr' mechanism is deprecated, and is unreliable. It is strongly recommended to not use it.")
 	}
 
 	if strings.Contains(spf, "all") {
@@ -503,18 +503,18 @@ func (s *Scanner) CheckSPF(spf string) []string {
 }
 
 func (s *Scanner) checkHostTLS(hostname string, port int) (advice []string) {
-	// strip the trailing dot from DNS records
+	// Strip the trailing dot from DNS records.
 	if string(hostname[len(hostname)-1]) == "." {
 		hostname = hostname[:len(hostname)-1]
 	}
 
-	// check if the advice is already in the cache
+	// Check if the advice is already in the cache.
 	tlsAdvice := s.advisor.tlsCacheHost.Get(hostname)
 	if tlsAdvice != nil {
 		return *tlsAdvice
 	}
 
-	// set the advice in the cache after the function returns
+	// Set the advice in the cache after the function returns.
 	defer func() {
 		s.advisor.tlsCacheHost.Set(hostname, &advice)
 	}()
@@ -526,7 +526,7 @@ func (s *Scanner) checkHostTLS(hostname string, port int) (advice []string) {
 	conn, err := tls.DialWithDialer(s.advisor.dialer, "tcp", hostname+":"+cast.ToString(port), nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "no such host") {
-			// fill variable to satisfy deferred cache fill
+			// Fill variable to satisfy deferred cache fill.
 			advice = []string{hostname + " could not be reached"}
 			return advice
 		}
@@ -550,25 +550,25 @@ func (s *Scanner) checkHostTLS(hostname string, port int) (advice []string) {
 }
 
 func (s *Scanner) checkMailTls(hostname string) (advice []string) {
-	// strip the trailing dot from DNS records
+	// Strip the trailing dot from DNS records.
 	if string(hostname[len(hostname)-1]) == "." {
 		hostname = hostname[:len(hostname)-1]
 	}
 
-	// check if the advice is already in the cache
+	// Check if the advice is already in the cache.
 	tlsAdvice := s.advisor.tlsCacheMail.Get(hostname)
 	if tlsAdvice != nil {
 		return *tlsAdvice
 	}
 
-	// set the advice in the cache after the function returns
+	// Set the advice in the cache after the function returns.
 	defer func() {
 		s.advisor.tlsCacheMail.Set(hostname, &advice)
 	}()
 
 	conn, err := s.advisor.dialer.Dial("tcp", hostname+":25")
 	if err != nil {
-		// fill variable to satisfy deferred cache fill
+		// Fill variable to satisfy deferred cache fill.
 		if strings.Contains(err.Error(), "i/o timeout") {
 			advice = []string{"Failed to reach domain before timeout"}
 		} else {
@@ -581,7 +581,7 @@ func (s *Scanner) checkMailTls(hostname string) (advice []string) {
 
 	client, err := smtp.NewClient(conn, hostname)
 	if err != nil {
-		// fill variable to satisfy deferred cache fill
+		// Fill variable to satisfy deferred cache fill.
 		advice = []string{"Failed to reach domain"}
 		return advice
 	}
@@ -595,16 +595,16 @@ func (s *Scanner) checkMailTls(hostname string) (advice []string) {
 		if strings.Contains(err.Error(), "certificate is not trusted") || strings.Contains(err.Error(), "failed to verify certificate") {
 			advice = append(advice, "No valid certificate could be found.")
 
-			// close the existing connection and create a new one as we can't reuse it in the same way as the checkHostTLS function
+			// Close the existing connection and create a new one as we can't reuse it in the same way as the checkHostTLS function.
 			if err = conn.Close(); err != nil {
-				// fill variable to satisfy deferred cache fill
+				// Fill variable to satisfy deferred cache fill.
 				advice = append(advice, "Failed to re-attempt connection without certificate verification")
 				return advice
 			}
 
 			conn, err = s.advisor.dialer.Dial("tcp", hostname+"25")
 			if err != nil {
-				// fill variable to satisfy deferred cache fill
+				// Fill variable to satisfy deferred cache fill.
 				advice = []string{"Failed to reach domain"}
 				return advice
 			}
@@ -612,20 +612,20 @@ func (s *Scanner) checkMailTls(hostname string) (advice []string) {
 
 			client, err = smtp.NewClient(conn, hostname)
 			if err != nil {
-				// fill variable to satisfy deferred cache fill
+				// Fill variable to satisfy deferred cache fill.
 				advice = []string{"Failed to reach domain"}
 				return advice
 			}
 
-			// retry with InsecureSkipVerify
+			// Retry with InsecureSkipVerify.
 			tlsConfig.InsecureSkipVerify = true
 			if err = client.StartTLS(tlsConfig); err != nil {
-				// fill variable to satisfy deferred cache fill
+				// Fill variable to satisfy deferred cache fill.
 				advice = append(advice, "Failed to start TLS connection")
 				return advice
 			}
 		} else {
-			// fill variable to satisfy deferred cache fill
+			// Fill variable to satisfy deferred cache fill.
 			advice = []string{"Failed to start TLS connection: " + err.Error()}
 			return advice
 		}
@@ -640,19 +640,19 @@ func (s *Scanner) checkMailTls(hostname string) (advice []string) {
 
 func (s *Scanner) CheckMTASTS(record string, policy string) (advice []string) {
 	if record == "" {
-		return []string{"You do not have MTA-MTASTS setup!"}
+		return []string{"You do not have MTA-STS setup!"}
 	}
 
 	if !strings.HasPrefix(record, "v=STSv1") {
-		advice = append(advice, "The beginning of your MTA-MTASTS record should be v=STSv1 with specific capitalization.")
+		advice = append(advice, "The beginning of your MTA-STS record should be v=STSv1 with specific capitalization.")
 	}
 
 	if !strings.Contains(record, "id=") {
-		advice = append(advice, "The MTA-MTASTS record should contain an 'id' tag.")
+		advice = append(advice, "The MTA-STS record should contain an 'id' tag.")
 	}
 
 	if policy == "" {
-		advice = append(advice, "The MTA-MTASTS policy is missing.")
+		advice = append(advice, "The MTA-STS policy is missing.")
 		return advice
 	}
 	lines := strings.Split(policy, "\n")
@@ -669,28 +669,28 @@ func (s *Scanner) CheckMTASTS(record string, policy string) (advice []string) {
 					case "enforce":
 						break
 					case "testing":
-						advice = append(advice, "The MTA-MTASTS policy is in testing mode. This means that the policy will not be enforced.")
+						advice = append(advice, "The MTA-STS policy is in testing mode. This means that the policy will not be enforced.")
 					case "none":
-						advice = append(advice, "The MTA-MTASTS policy is in none mode. This means that the policy will not be used.")
+						advice = append(advice, "The MTA-STS policy is in none mode. This means that the policy will not be used.")
 					default:
-						advice = append(advice, "The MTA-MTASTS policy mode is invalid. It should be either enforce, testing or none.")
+						advice = append(advice, "The MTA-STS policy mode is invalid. It should be either enforce, testing or none.")
 					}
 				}
 			}
 		}
 		if !found {
-			advice = append(advice, "The MTA-MTASTS policy is missing the "+field+" field.")
+			advice = append(advice, "The MTA-STS policy is missing the "+field+" field.")
 		}
 	}
 
 	if len(advice) == 0 {
-		return []string{"MTA-MTASTS seems to be setup correctly! No further action needed."}
+		return []string{"MTA-STS seems to be setup correctly! No further action needed."}
 	}
 	return advice
 }
 
 func (s *Scanner) checkSPFLookup(spf string, lookupParents []string, lookupCount *int) string {
-	// get DNS lookups from record
+	// Get DNS lookups from record.
 	parts := strings.Split(spf, " ")
 	for _, part := range parts {
 		var keyValue []string

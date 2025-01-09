@@ -31,7 +31,7 @@ func (s *ScanResultWithAdvice) CSV() []string {
 			advice += "DNSSEC: " + value + "; "
 		}
 		for _, value := range s.Advice.MTASTS {
-			advice += "MTA-MTASTS: " + value + "; "
+			advice += "MTA-STS: " + value + "; "
 		}
 		for _, value := range s.Advice.MX {
 			advice += "MX: " + value + "; "

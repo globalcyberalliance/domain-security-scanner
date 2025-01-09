@@ -60,8 +60,8 @@ type (
 		MX        []string `json:"mx,omitempty" yaml:"mx,omitempty" doc:"The MX records for the domain." example:"aspmx.l.google.com"`
 		NS        []string `json:"ns,omitempty" yaml:"ns,omitempty" doc:"The NS records for the domain." example:"ns1.example.com"`
 		SPF       string   `json:"spf,omitempty" yaml:"spf,omitempty" doc:"The SPF record for the domain." example:"v=spf1 include:_spf.google.com ~all"`
-		STS       string   `json:"mta-sts,omitempty" yaml:"mta-sts,omitempty" doc:"The MTA-MTASTS record for the domain." example:"v=STSv1; id=20210803T010200;"`
-		STSPolicy string   `json:"mta-sts-policy,omitempty" yaml:"mta-sts-policy,omitempty" doc:"The MTA-MTASTS policy for the domain." example:"version: STSv1\nmode: enforce\nmx: mail.example.com\nmx: *.example.net\nmax_age: 86400\n"`
+		STS       string   `json:"mta-sts,omitempty" yaml:"mta-sts,omitempty" doc:"The MTA-STS record for the domain." example:"v=STSv1; id=20210803T010200;"`
+		STSPolicy string   `json:"mta-sts-policy,omitempty" yaml:"mta-sts-policy,omitempty" doc:"The MTA-STS policy for the domain." example:"version: STSv1\nmode: enforce\nmx: mail.example.com\nmx: *.example.net\nmax_age: 86400\n"`
 	}
 )
 
@@ -70,7 +70,7 @@ func New(logger zerolog.Logger, timeout time.Duration, opts ...Option) (*Scanner
 		return nil, errors.New("timeout must be greater than 0")
 	}
 
-	dnsClient, err := dns.New(timeout, 4096, 0, "")
+	dnsClient, err := dns.New(timeout, 4096, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create DNS client: %w", err)
 	}
@@ -215,7 +215,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 				}
 			}()
 
-			// Get MTA-MTASTS record.
+			// Get MTA-STS record.
 			go func() {
 				defer scanWg.Done()
 				result.STS, result.STSPolicy, err = s.dnsClient.GetTypeMTASTS(domainToScan)
