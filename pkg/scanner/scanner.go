@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/cache"
-	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/dns"
+	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/cache"
+	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/dns"
 	"github.com/panjf2000/ants/v2"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"

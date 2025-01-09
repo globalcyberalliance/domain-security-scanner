@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/model"
-	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/scanner"
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/model"
+	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/scanner"
 )
 
 func (s *Server) registerScanRoutes() {

@@ -7,8 +7,8 @@ import (
 	htmlTmpl "html/template"
 	textTmpl "text/template"
 
-	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/model"
-	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/scanner"
+	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/model"
+	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/scanner"
 )
 
 var (

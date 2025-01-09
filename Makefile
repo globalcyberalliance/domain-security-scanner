@@ -1,6 +1,6 @@
-PROJECT			 := github.com/GlobalCyberAlliance/domain-security-scanner/v3
+PROJECT			 := github.com/globalcyberalliance/domain-security-scanner/v3
 GO				 := $(shell which go 2>/dev/null)
-GOFIELDALIGNMENT := $(shell which fieldalignment 2>/dev/null)
+GOFIELDALIGNMENT := $(shell which betteralign 2>/dev/null)
 GOFUMPT			 := $(shell which gofumpt 2>/dev/null)
 GOLINTER		 := $(shell which golangci-lint 2>/dev/null)
 GONILAWAY        := $(shell which nilaway 2>/dev/null)

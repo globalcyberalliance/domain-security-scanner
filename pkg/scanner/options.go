@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/dns"
+	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/dns"
 )
 
 // OverwriteOption allows the caller to overwrite an existing option.

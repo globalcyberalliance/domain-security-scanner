@@ -6,9 +6,9 @@ import (
 	textTmpl "text/template"
 	"time"
 
-	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/cache"
-	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/model"
-	"github.com/GlobalCyberAlliance/domain-security-scanner/v3/pkg/scanner"
+	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/cache"
+	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/model"
+	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/scanner"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cast"

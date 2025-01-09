@@ -8,7 +8,7 @@ at [https://dmarcguide.globalcyberalliance.org](https://dmarcguide.globalcyberal
 ## Download
 
 You can download pre-compiled binaries for macOS, Linux and Windows from
-the [releases](https://github.com/GlobalCyberAlliance/domain-security-scanner/releases) page.
+the [releases](https://github.com/globalcyberalliance/domain-security-scanner/releases) page.
 
 Alternatively, you can run the binary from within our pre-built Docker image:
 
@@ -21,7 +21,7 @@ docker run ghcr.io/globalcyberalliance/domain-security-scanner:latest
 To build this application, you'll need [Go](https://golang.org/) installed.
 
 ```shell
-git clone https://github.com/GlobalCyberAlliance/domain-security-scanner.git
+git clone https://github.com/globalcyberalliance/domain-security-scanner.git
 cd domain-security-scanner
 make
 ```
@@ -84,7 +84,7 @@ this `http://server-ip:port/api/v1/scan/globalcyberalliance.org`, which will ret
       "alt3.aspmx.l.google.com.",
       "alt4.aspmx.l.google.com."
     ],
-    "spf": "v=spf1 include:_u.globalcyberalliance.org._spf.smart.ondmarc.com -all",
+    "spf": "v=spf1 include:_u.globalcyberalliance.org._spf.smart.ondmarc.com -all"
   },
   "advice": {
     "bimi": [
@@ -203,7 +203,8 @@ Which will return a JSON response like this:
 
 ## Serve Dedicated Mailbox
 
-You can also serve scan results via a dedicated mailbox. It is advised that you use this mailbox for this sole purpose, as all emails will be deleted at each 10 second interval.
+You can also serve scan results via a dedicated mailbox. It is advised that you use this mailbox for this sole purpose,
+as all emails will be deleted at each 10 second interval.
 
 ```shell
 dss serve mail --inboundHost "imap.gmail.com:993" --inboundPass "SomePassword" --inboundUser "SomeAddress@domain.tld" --outboundHost "smtp.gmail.com:587" --outboundPass "SomePassword" --outboundUser "SomeAddress@domain.tld" --advise
@@ -218,12 +219,12 @@ You can then email this inbox from any address, and you'll receive an email back
 | `--advise`       | `-a`  | Provide suggestions for incorrect/missing mail security features                                                |
 | `--cache`        |       | Specify how long to cache results for (default 3m)                                                              |
 | `--checkTLS`     |       | Check the TLS connectivity and cert validity of domains                                                         |
-| `--dnssec`       |       | Include scan for DNSSEC records                                                                                 |
 | `--concurrent`   | `-c`  | The number of domains to scan concurrently (defaults to your number of CPU threads)                             |
 | `--debug`        | `-d`  | Print debug logs                                                                                                |
 | `--dkimSelector` |       | Specify a comma seperated list of DKIM selectors (default "")                                                   |
 | `--dnsBuffer`    |       | Specify the allocated buffer for DNS responses (default 4096)                                                   |
 | `--dnsProtocol`  |       | Protocol to use for DNS queries (udp, tcp, tcp-tls) (default udp)                                               |
+| `--dnssec`       |       | Include scan for DNSSEC records                                                                                 |
 | `--format`       | `-f`  | Format to print results in (yaml, json, csv) (default "yaml")                                                   |
 | `--nameservers`  | `-n`  | Use specific nameservers, in host[:port] format; may be specified multiple times                                |
 | `--outputFile`   | `-o`  | Output the results to a specified file (creates a file with the current unix timestamp if no file is specified) |
