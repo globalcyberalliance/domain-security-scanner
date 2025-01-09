@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"os"
 
-	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/advisor"
 	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/model"
 	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/scanner"
 	"github.com/spf13/cobra"
@@ -26,18 +25,16 @@ var cmdScan = &cobra.Command{
 			scanner.WithDNSBuffer(dnsBuffer),
 			scanner.WithDNSProtocol(dnsProtocol),
 			scanner.WithNameservers(nameservers),
+			scanner.WithCheckTLS(checkTLS),
 		}
 
 		if len(dkimSelector) > 0 {
 			opts = append(opts, scanner.WithDKIMSelectors(dkimSelector...))
 		}
-
 		sc, err := scanner.New(log, timeout, opts...)
 		if err != nil {
 			log.Fatal().Err(err).Msg("An unexpected error occurred.")
 		}
-
-		domainAdvisor := advisor.NewAdvisor(timeout, cache, checkTLS)
 
 		if format == "csv" && outputFile == "" {
 			log.Info().Msg("CSV header: domain,BIMI,DKIM,DMARC,MX,SPF,TXT,error,advice")
@@ -65,7 +62,7 @@ var cmdScan = &cobra.Command{
 				}
 
 				for _, result := range results {
-					printResult(result, domainAdvisor)
+					printResult(result, sc)
 				}
 			}
 
@@ -84,12 +81,12 @@ var cmdScan = &cobra.Command{
 		}
 
 		for _, result := range results {
-			printResult(result, domainAdvisor)
+			printResult(result, sc)
 		}
 	},
 }
 
-func printResult(result *scanner.Result, domainAdvisor *advisor.Advisor) {
+func printResult(result *scanner.Result, sc *scanner.Scanner) {
 	if result == nil {
 		log.Fatal().Msg("An unexpected error occurred.")
 	}
@@ -99,7 +96,7 @@ func printResult(result *scanner.Result, domainAdvisor *advisor.Advisor) {
 	}
 
 	if advise && result.Error != scanner.ErrInvalidDomain {
-		resultWithAdvice.Advice = domainAdvisor.CheckAll(result.Domain, result.BIMI, result.DKIM, result.DMARC, result.MX, result.SPF)
+		resultWithAdvice.Advice = sc.CheckAll(result.Domain, result.BIMI, result.DKIM, result.DMARC, result.DNSSEC, result.MX, result.SPF, result.STS, result.STSPolicy)
 	}
 
 	printToConsole(resultWithAdvice)

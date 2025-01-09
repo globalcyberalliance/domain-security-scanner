@@ -8,7 +8,6 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
-	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/advisor"
 	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/scanner"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -30,7 +29,7 @@ type Server struct {
 	CheckTLS bool
 
 	// Services used by the various HTTP routes
-	Advisor *advisor.Advisor
+	Advisor *scanner.Advisor
 	Scanner *scanner.Scanner
 }
 

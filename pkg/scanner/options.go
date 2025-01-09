@@ -3,14 +3,12 @@ package scanner
 import (
 	"errors"
 	"fmt"
-	"net"
-	"net/netip"
 	"regexp"
 	"runtime"
 	"strings"
 	"time"
 
-	"github.com/miekg/dns"
+	"github.com/globalcyberalliance/domain-security-scanner/v3/pkg/dns"
 )
 
 // OverwriteOption allows the caller to overwrite an existing option.
@@ -47,6 +45,16 @@ func WithConcurrentScans(quota uint16) Option {
 	}
 }
 
+func WithCheckTLS(checkTLS bool) Option {
+	return func(s *Scanner) error {
+		if s.advisor == nil {
+			return errors.New("advisor not initialized")
+		}
+		s.advisor.checkTLS = checkTLS
+		return nil
+	}
+}
+
 // WithDKIMSelectors allows the caller to specify which DKIM selectors to
 // scan for (falling back to the default selectors if none are provided).
 func WithDKIMSelectors(selectors ...string) Option {
@@ -62,7 +70,7 @@ func WithDKIMSelectors(selectors ...string) Option {
 			}
 		}
 
-		s.dkimSelectors = selectors
+		s.dnsClient.DKIMSelectors = selectors
 
 		return nil
 	}
@@ -75,7 +83,7 @@ func WithDNSBuffer(bufferSize uint16) Option {
 			return fmt.Errorf("invalid DNS buffer size: %d", bufferSize)
 		}
 
-		s.dnsBuffer = bufferSize
+		s.dnsClient.Buffer = bufferSize
 
 		return nil
 	}
@@ -88,7 +96,7 @@ func WithDNSProtocol(protocol string) Option {
 
 		switch protocol {
 		case "udp", "tcp", "tcp-tls":
-			s.dnsClient.Net = protocol
+			s.dnsClient.Protocol = protocol
 		default:
 			return fmt.Errorf("invalid DNS protocol: %s, valid options: udp, tcp, tcp-tls", protocol)
 		}
@@ -102,57 +110,12 @@ func WithDNSProtocol(protocol string) Option {
 // the nameservers specified in /etc/resolv.conf.
 func WithNameservers(nameservers []string) Option {
 	return func(s *Scanner) error {
-		// If the provided slice of nameservers is nil, or has zero
-		// elements, load up /etc/resolv.conf, and get the "index"
-		// directives from there.
-		if len(nameservers) == 0 {
-			// check if /etc/resolv.conf exists
-			config, err := dns.ClientConfigFromFile("/etc/resolv.conf")
-			if err != nil {
-				// if /etc/resolv.conf does not exist, use Google and Cloudflare
-				s.nameservers = []string{"8.8.8.8:53", "8.8.4.4:53", "1.1.1.1:53"}
-				return nil
-			}
-
-			nameservers = config.Servers
+		nameservers, err := dns.ParseNameservers(nameservers)
+		if err != nil {
+			return fmt.Errorf("failed to parse nameservers: %w", err)
 		}
 
-		// Make sure each of the nameservers is in the "host:port" format.
-		//
-		// The "dns" package requires that you explicitly state the port
-		// number for the resolvers that get queried.
-		for index := range nameservers {
-			addr, err := netip.ParseAddr(nameservers[index])
-			if err != nil {
-				// might contain a port
-				host, port, err := net.SplitHostPort(nameservers[index])
-				if err != nil {
-					return fmt.Errorf("invalid IP address: %s", nameservers[index])
-				}
-
-				// validate IP
-				addr, err = netip.ParseAddr(host)
-				if err != nil {
-					return fmt.Errorf("invalid IP address: %s", nameservers[index])
-				}
-
-				if addr.Is6() {
-					nameservers[index] = fmt.Sprintf("[%s]:%v", addr.String(), port)
-				} else {
-					nameservers[index] = fmt.Sprintf("%s:%v", addr.String(), port)
-				}
-
-				continue
-			}
-
-			if addr.Is6() {
-				nameservers[index] = fmt.Sprintf("[%s]:53", addr.String())
-			} else {
-				nameservers[index] = fmt.Sprintf("%s:53", addr.String())
-			}
-		}
-
-		s.nameservers = nameservers
+		s.dnsClient.Nameservers = nameservers
 
 		return nil
 	}
