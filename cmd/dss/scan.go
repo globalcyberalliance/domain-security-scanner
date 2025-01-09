@@ -86,7 +86,7 @@ var cmdScan = &cobra.Command{
 	},
 }
 
-func printResult(result *scanner.Result, s *scanner.Scanner) {
+func printResult(result *scanner.Result, sc *scanner.Scanner) {
 	if result == nil {
 		log.Fatal().Msg("An unexpected error occurred.")
 	}
@@ -96,7 +96,7 @@ func printResult(result *scanner.Result, s *scanner.Scanner) {
 	}
 
 	if advise && result.Error != scanner.ErrInvalidDomain {
-		resultWithAdvice.Advice = s.CheckAll(result.Domain, result.BIMI, result.DKIM, result.DMARC, result.MX, result.SPF, result.STS, result.STSPolicy, result.DNSSEC)
+		resultWithAdvice.Advice = sc.CheckAll(result.Domain, result.BIMI, result.DKIM, result.DMARC, result.DNSSEC, result.MX, result.SPF, result.STS, result.STSPolicy)
 	}
 
 	printToConsole(resultWithAdvice)

@@ -71,7 +71,7 @@ func TestOptionWithDKIMSelectors(t *testing.T) {
 	t.Run("ValidDKIMSelectors", func(t *testing.T) {
 		scanner, err := New(logger, timeout, WithDKIMSelectors("selector1", "selector1._google"))
 		require.NoError(t, err)
-		require.Equal(t, []string{"selector1", "selector1._google"}, scanner.dnsClient.DkimSelectors)
+		require.Equal(t, []string{"selector1", "selector1._google"}, scanner.dnsClient.DKIMSelectors)
 	})
 
 	t.Run("InvalidDKIMSelectorEndingCharacter", func(t *testing.T) {
@@ -140,19 +140,19 @@ func TestOptionWithDNSProtocol(t *testing.T) {
 	t.Run("ValidProtocolTCP", func(t *testing.T) {
 		scanner, err := New(logger, timeout, WithDNSProtocol("TCP"))
 		require.NoError(t, err)
-		require.Equal(t, "tcp", scanner.dnsClient.Net)
+		require.Equal(t, "tcp", scanner.dnsClient.Protocol)
 	})
 
 	t.Run("ValidProtocolTCPWithTLS", func(t *testing.T) {
 		scanner, err := New(logger, timeout, WithDNSProtocol("TCP-tls"))
 		require.NoError(t, err)
-		require.Equal(t, "tcp-tls", scanner.dnsClient.Net)
+		require.Equal(t, "tcp-tls", scanner.dnsClient.Protocol)
 	})
 
 	t.Run("ValidProtocolUDP", func(t *testing.T) {
 		scanner, err := New(logger, timeout, WithDNSProtocol("UDP"))
 		require.NoError(t, err)
-		require.Equal(t, "udp", scanner.dnsClient.Net)
+		require.Equal(t, "udp", scanner.dnsClient.Protocol)
 	})
 }
 

@@ -18,7 +18,6 @@ import (
 var emailRegex = regexp.MustCompile("^[a-zA-Z0-9.!#$%&'*+\\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$")
 
 type (
-
 	// Advisor config options.
 	Advisor struct {
 		consumerDomains      map[string]struct{}
@@ -34,9 +33,9 @@ type (
 		BIMI   []string `json:"bimi,omitempty" yaml:"bimi,omitempty" doc:"BIMI advice." example:"Your BIMI record looks good! No further action needed."`
 		DKIM   []string `json:"dkim,omitempty" yaml:"dkim,omitempty" doc:"DKIM advice." example:"DKIM is setup for this email server. However, if you have other 3rd party systems, please send a test email to confirm DKIM is setup properly."`
 		DMARC  []string `json:"dmarc,omitempty" yaml:"dmarc,omitempty" doc:"DMARC advice." example:"You are currently at the lowest level and receiving reports, which is a great starting point. Please make sure to review the reports, make the appropriate adjustments, and move to either quarantine or reject soon."`
+		MTASTS []string `json:"mta-sts,omitempty" yaml:"mta-sts,omitempty" doc:"MTA-MTASTS advice." example:"MTA-MTASTS seems to be setup correctly! No further action needed."`
 		MX     []string `json:"mx,omitempty" yaml:"mx,omitempty" doc:"MX advice." example:"You have a multiple mail servers setup! No further action needed."`
 		SPF    []string `json:"spf,omitempty" yaml:"spf,omitempty" doc:"SPF advice." example:"SPF seems to be setup correctly! No further action needed."`
-		STS    []string `json:"mta-sts,omitempty" yaml:"mta-sts,omitempty" doc:"MTA-STS advice." example:"MTA-STS seems to be setup correctly! No further action needed."`
 		DNSSEC []string `json:"dnssec,omitempty" yaml:"dnssec,omitempty" doc:"DNSSEC advice." example:"DNSSEC seems to be setup correctly! No further action needed."`
 	}
 
@@ -72,7 +71,7 @@ func NewAdvisor(timeout time.Duration, cacheLifetime time.Duration) *Advisor {
 	return &advisor
 }
 
-func (s *Scanner) CheckAll(domain, bimi, dkim, dmarc string, mx []string, spf string, sts string, stsPolicy string, dnssec string) *Advice {
+func (s *Scanner) CheckAll(domain, bimi, dkim, dmarc string, dnssec string, mx []string, spf string, sts string, stsPolicy string) *Advice {
 	advice := &Advice{}
 	var wg sync.WaitGroup
 
@@ -98,22 +97,22 @@ func (s *Scanner) CheckAll(domain, bimi, dkim, dmarc string, mx []string, spf st
 	}()
 
 	go func() {
+		advice.DNSSEC = s.CheckDNSSEC(dnssec)
+		wg.Done()
+	}()
+
+	go func() {
+		advice.MTASTS = s.CheckMTASTS(sts, stsPolicy)
+		wg.Done()
+	}()
+
+	go func() {
 		advice.MX = s.CheckMX(mx)
 		wg.Done()
 	}()
 
 	go func() {
 		advice.SPF = s.CheckSPF(spf)
-		wg.Done()
-	}()
-
-	go func() {
-		advice.STS = s.CheckSTS(sts, stsPolicy)
-		wg.Done()
-	}()
-
-	go func() {
-		advice.DNSSEC = s.CheckDNSSEC(dnssec)
 		wg.Done()
 	}()
 
@@ -142,35 +141,37 @@ func (s *Scanner) CheckBIMI(bimi string) (advice []string) {
 				svgFound = true
 				tagValue := strings.TrimPrefix(tag, "l=")
 
-				// download SVG logo
+				// Download SVG logo.
 				response, err := http.Head(tagValue)
 				if err != nil || response == nil {
 					advice = append(advice, "Your SVG logo could not be downloaded.")
 					continue
 				}
-				defer response.Body.Close()
 
 				if response.StatusCode != http.StatusOK {
 					advice = append(advice, "Your SVG logo could not be downloaded.")
+					response.Body.Close()
 					continue
 				}
 
 				if response.ContentLength > int64(32*1024) {
 					advice = append(advice, "Your SVG logo exceeds the maximum of 32KB.")
 				}
+
+				response.Body.Close()
 			}
 
 			if strings.Contains(tag, "a=") {
 				vmcFound = true
 				tagValue := strings.TrimPrefix(tag, "a=")
 
-				// download VMC cert
+				// Download VMC cert.
 				response, err := http.Head(tagValue)
 				if err != nil || response == nil {
 					advice = append(advice, "Your VMC certificate could not be downloaded.")
 					continue
 				}
-				defer response.Body.Close()
+				response.Body.Close()
 
 				if response.StatusCode != http.StatusOK {
 					advice = append(advice, "Your VMC certificate could not be downloaded.")
@@ -637,21 +638,21 @@ func (s *Scanner) checkMailTls(hostname string) (advice []string) {
 	return advice
 }
 
-func (s *Scanner) CheckSTS(record string, policy string) (advice []string) {
+func (s *Scanner) CheckMTASTS(record string, policy string) (advice []string) {
 	if record == "" {
-		return []string{"You do not have MTA-STS setup!"}
+		return []string{"You do not have MTA-MTASTS setup!"}
 	}
 
 	if !strings.HasPrefix(record, "v=STSv1") {
-		advice = append(advice, "The beginning of your MTA-STS record should be v=STSv1 with specific capitalization.")
+		advice = append(advice, "The beginning of your MTA-MTASTS record should be v=STSv1 with specific capitalization.")
 	}
 
 	if !strings.Contains(record, "id=") {
-		advice = append(advice, "The MTA-STS record should contain an 'id' tag.")
+		advice = append(advice, "The MTA-MTASTS record should contain an 'id' tag.")
 	}
 
 	if policy == "" {
-		advice = append(advice, "The MTA-STS policy is missing.")
+		advice = append(advice, "The MTA-MTASTS policy is missing.")
 		return advice
 	}
 	lines := strings.Split(policy, "\n")
@@ -668,22 +669,22 @@ func (s *Scanner) CheckSTS(record string, policy string) (advice []string) {
 					case "enforce":
 						break
 					case "testing":
-						advice = append(advice, "The MTA-STS policy is in testing mode. This means that the policy will not be enforced.")
+						advice = append(advice, "The MTA-MTASTS policy is in testing mode. This means that the policy will not be enforced.")
 					case "none":
-						advice = append(advice, "The MTA-STS policy is in none mode. This means that the policy will not be used.")
+						advice = append(advice, "The MTA-MTASTS policy is in none mode. This means that the policy will not be used.")
 					default:
-						advice = append(advice, "The MTA-STS policy mode is invalid. It should be either enforce, testing or none.")
+						advice = append(advice, "The MTA-MTASTS policy mode is invalid. It should be either enforce, testing or none.")
 					}
 				}
 			}
 		}
 		if !found {
-			advice = append(advice, "The MTA-STS policy is missing the "+field+" field.")
+			advice = append(advice, "The MTA-MTASTS policy is missing the "+field+" field.")
 		}
 	}
 
 	if len(advice) == 0 {
-		return []string{"MTA-STS seems to be setup correctly! No further action needed."}
+		return []string{"MTA-MTASTS seems to be setup correctly! No further action needed."}
 	}
 	return advice
 }

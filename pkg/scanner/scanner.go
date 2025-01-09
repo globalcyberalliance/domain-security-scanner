@@ -60,8 +60,8 @@ type (
 		MX        []string `json:"mx,omitempty" yaml:"mx,omitempty" doc:"The MX records for the domain." example:"aspmx.l.google.com"`
 		NS        []string `json:"ns,omitempty" yaml:"ns,omitempty" doc:"The NS records for the domain." example:"ns1.example.com"`
 		SPF       string   `json:"spf,omitempty" yaml:"spf,omitempty" doc:"The SPF record for the domain." example:"v=spf1 include:_spf.google.com ~all"`
-		STS       string   `json:"mta-sts,omitempty" yaml:"mta-sts,omitempty" doc:"The MTA-STS record for the domain." example:"v=STSv1; id=20210803T010200;"`
-		STSPolicy string   `json:"mta-sts-policy,omitempty" yaml:"mta-sts-policy,omitempty" doc:"The MTA-STS policy for the domain." example:"version: STSv1\nmode: enforce\nmx: mail.example.com\nmx: *.example.net\nmax_age: 86400\n"`
+		STS       string   `json:"mta-sts,omitempty" yaml:"mta-sts,omitempty" doc:"The MTA-MTASTS record for the domain." example:"v=STSv1; id=20210803T010200;"`
+		STSPolicy string   `json:"mta-sts-policy,omitempty" yaml:"mta-sts-policy,omitempty" doc:"The MTA-MTASTS policy for the domain." example:"version: STSv1\nmode: enforce\nmx: mail.example.com\nmx: *.example.net\nmax_age: 86400\n"`
 	}
 )
 
@@ -81,6 +81,7 @@ func New(logger zerolog.Logger, timeout time.Duration, opts ...Option) (*Scanner
 		logger:    logger,
 		poolSize:  uint16(runtime.NumCPU()),
 	}
+
 	scanner.advisor = NewAdvisor(timeout, scanner.cacheDuration)
 	for _, opt := range opts {
 		if err := opt(scanner); err != nil {
@@ -88,10 +89,10 @@ func New(logger zerolog.Logger, timeout time.Duration, opts ...Option) (*Scanner
 		}
 	}
 
-	// Initialize cache
+	// Initialize cache.
 	scanner.cache = cache.New[Result](scanner.cacheDuration)
 
-	// Create a new pool of workers for the scanner
+	// Create a new pool of workers for the scanner.
 	pool, err := ants.NewPool(int(scanner.poolSize), ants.WithExpiryDuration(timeout), ants.WithPanicHandler(func(err interface{}) {
 		scanner.logger.Error().Err(errors.New(cast.ToString(err))).Msg("unrecoverable panic occurred while analysing pcap")
 	}))
@@ -154,13 +155,13 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 				}()
 			}
 
-			// check that the domain name is valid
+			// Check that the domain name is valid.
 			result.NS, err = s.dnsClient.GetTypeNS(domainToScan)
 			if err != nil || len(result.NS) == 0 {
-				// check if TXT records exist, as the nameserver check won't work for subdomains
+				// Check if TXT records exist, as the nameserver check won't work for subdomains.
 				records, err := s.dnsClient.GetDNSAnswers(domainToScan, dns.TypeTXT)
 				if err != nil || len(records) == 0 {
-					// fill variable to satisfy deferred cache fill
+					// Fill variable to satisfy deferred cache fill.
 					result = &Result{
 						Domain: domainToScan,
 						Error:  ErrInvalidDomain,
@@ -205,6 +206,24 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 				}
 			}()
 
+			// Get DNSSEC records.
+			go func() {
+				defer scanWg.Done()
+				result.DNSSEC, err = s.dnsClient.GetTypeDNSSEC(domainToScan)
+				if err != nil {
+					errs = append(errs, "dnssec:"+err.Error())
+				}
+			}()
+
+			// Get MTA-MTASTS record.
+			go func() {
+				defer scanWg.Done()
+				result.STS, result.STSPolicy, err = s.dnsClient.GetTypeMTASTS(domainToScan)
+				if err != nil {
+					errs = append(errs, "mta-sts:"+err.Error())
+				}
+			}()
+
 			// Get MX records.
 			go func() {
 				defer scanWg.Done()
@@ -220,24 +239,6 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 				result.SPF, err = s.dnsClient.GetTypeSPF(domainToScan)
 				if err != nil {
 					errs = append(errs, "spf:"+err.Error())
-				}
-			}()
-
-			// Get MTA-STS record.
-			go func() {
-				defer scanWg.Done()
-				result.STS, result.STSPolicy, err = s.dnsClient.GetTypeSTS(domainToScan)
-				if err != nil {
-					errs = append(errs, "mta-sts:"+err.Error())
-				}
-			}()
-
-			// Get DNSSEC records.
-			go func() {
-				defer scanWg.Done()
-				result.DNSSEC, err = s.dnsClient.GetTypeDNSSEC(domainToScan)
-				if err != nil {
-					errs = append(errs, "dnssec:"+err.Error())
 				}
 			}()
 
@@ -287,7 +288,7 @@ func (s *Scanner) ScanZone(zone io.Reader) ([]*Result, error) {
 	return s.Scan(domains...)
 }
 
-// Close closes the scanner
+// Close closes the scanner.
 func (s *Scanner) Close() {
 	s.pool.Release()
 	s.cache.Flush()

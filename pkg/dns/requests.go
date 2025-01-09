@@ -49,8 +49,6 @@ var (
 		dns.TypeCDNSKEY: "CDNSKEY",
 		dns.TypeCDS:     "CDS",
 	}
-
-	reverseDnssecTypes = map[uint16]string{}
 )
 
 // TODO: we no longer disregard NXDOMAIN requests. This should be handled downstream.
@@ -167,10 +165,10 @@ func (s *Client) GetTypeBIMI(domain string) (string, error) {
 	return "", nil
 }
 
-// getTypeDKIM queries the DNS server for DKIM records of a domain.
+// GetTypeDKIM queries the DNS server for DKIM records of a domain.
 // It returns a string (DKIM record) and an error if any occurred.
 func (s *Client) GetTypeDKIM(domain string) (string, error) {
-	selectors := append(s.DkimSelectors, knownDkimSelectors...)
+	selectors := append(s.DKIMSelectors, knownDkimSelectors...)
 
 	for _, selector := range selectors {
 		records, err := s.getDNSRecords(selector+"._domainkey."+domain, dns.TypeTXT, true)
@@ -189,7 +187,7 @@ func (s *Client) GetTypeDKIM(domain string) (string, error) {
 	return "", nil
 }
 
-// getTypeDMARC queries the DNS server for DMARC records of a domain.
+// GetTypeDMARC queries the DNS server for DMARC records of a domain.
 // It returns a string (DMARC record) and an error if any occurred.
 func (s *Client) GetTypeDMARC(domain string) (string, error) {
 	for _, dname := range []string{
@@ -212,54 +210,32 @@ func (s *Client) GetTypeDMARC(domain string) (string, error) {
 	return "", nil
 }
 
-// getTypeSPF queries the DNS server for SPF records of a domain.
-// It returns a string (SPF record) and an error if any occurred.
-func (s *Client) GetTypeSPF(domain string) (string, error) {
-	records, err := s.getDNSRecords(domain, dns.TypeTXT, true)
-	if err != nil {
-		return "", err
-	}
+func (s *Client) GetTypeDNSSEC(domain string) (string, error) {
+	var dnssecInfo string
+	var errs []string
 
-	for _, record := range records {
-		if strings.HasPrefix(record, SPFPrefix) {
-			if !strings.Contains(record, "redirect=") {
-				return record, nil
-			}
+	for recordType, recordName := range dnssecTypes {
+		records, err := s.getDNSRecords(domain, recordType, true)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("failed to query %s: %v\n", recordName, err))
+			continue
+		}
 
-			parts := strings.Fields(record)
-			for _, part := range parts {
-				if strings.Contains(part, "redirect=") {
-					redirectDomain := strings.TrimPrefix(part, "redirect=")
-					return s.GetTypeSPF(redirectDomain)
-				}
+		for index, record := range records {
+			// Remove domain, TTL, class, and raw data digest.
+			dnssecInfo += fmt.Sprintf(" %s-%d: %v\n", recordName, index+1, record)
+			if record == "" {
+				fmt.Println("Empty record")
 			}
 		}
 	}
-
-	return "", nil
-}
-
-// getTypeSPF queries the DNS server for SPF records of a domain.
-// It returns a string (SPF record) and an error if any occurred.
-func (s *Client) GetTypeMX(domain string) ([]string, error) {
-	records, err := s.getDNSRecords(domain, dns.TypeMX, true)
-	if err != nil {
-		return nil, err
+	if len(errs) == 0 {
+		return dnssecInfo, nil
 	}
-
-	return records, nil
+	return dnssecInfo, fmt.Errorf("some DNSSEC record queries failed:\n%s", strings.Join(errs, "\n"))
 }
 
-func (s *Client) GetTypeNS(domain string) ([]string, error) {
-	records, err := s.getDNSRecords(domain, dns.TypeNS, true)
-	if err != nil {
-		return nil, err
-	}
-
-	return records, nil
-}
-
-func (s *Client) GetTypeSTS(domain string) (string, string, error) {
+func (s *Client) GetTypeMTASTS(domain string) (string, string, error) {
 	for _, dname := range []string{
 		"_mta-sts." + domain,
 		domain,
@@ -294,35 +270,49 @@ func (s *Client) GetTypeSTS(domain string) (string, string, error) {
 	return "", "", nil
 }
 
-func (s *Client) GetTypeDNSSEC(domain string) (string, error) {
-	var dnssecInfo string
-	var errorMessages []string
+// GetTypeMX queries the DNS server for SPF records of a domain.
+// It returns a string (SPF record) and an error if any occurred.
+func (s *Client) GetTypeMX(domain string) ([]string, error) {
+	records, err := s.getDNSRecords(domain, dns.TypeMX, true)
+	if err != nil {
+		return nil, err
+	}
 
-	for recordType, recordName := range dnssecTypes {
-		records, err := s.getDNSRecords(domain, recordType, true)
-		if err != nil {
-			errorMessages = append(errorMessages, fmt.Sprintf("failed to query %s: %v\n", recordName, err))
-			continue
-		}
+	return records, nil
+}
 
-		for index, record := range records {
-			// fmt.Println("Whole record :", record)
-			// for _, term := range strings.Split(record, "\n") {
-			// fmt.Println("line: ", term)
+func (s *Client) GetTypeNS(domain string) ([]string, error) {
+	records, err := s.getDNSRecords(domain, dns.TypeNS, true)
+	if err != nil {
+		return nil, err
+	}
 
-			//for _, word := range strings.Fields(term) {
-			//fmt.Println("word: ", word)
-			//}
-			//}
-			// remove domain, TTL, class, and raw data digest
-			dnssecInfo += fmt.Sprintf(" %s-%d: %v\n", recordName, index+1, record)
-			if record == "" {
-				fmt.Println("Empty record")
+	return records, nil
+}
+
+// GetTypeSPF queries the DNS server for SPF records of a domain.
+// It returns a string (SPF record) and an error if any occurred.
+func (s *Client) GetTypeSPF(domain string) (string, error) {
+	records, err := s.getDNSRecords(domain, dns.TypeTXT, true)
+	if err != nil {
+		return "", err
+	}
+
+	for _, record := range records {
+		if strings.HasPrefix(record, SPFPrefix) {
+			if !strings.Contains(record, "redirect=") {
+				return record, nil
+			}
+
+			parts := strings.Fields(record)
+			for _, part := range parts {
+				if strings.Contains(part, "redirect=") {
+					redirectDomain := strings.TrimPrefix(part, "redirect=")
+					return s.GetTypeSPF(redirectDomain)
+				}
 			}
 		}
 	}
-	if len(errorMessages) == 0 {
-		return dnssecInfo, nil
-	}
-	return dnssecInfo, fmt.Errorf("some DNSSEC record queries failed:\n%s", strings.Join(errorMessages, "\n"))
+
+	return "", nil
 }

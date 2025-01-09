@@ -27,6 +27,12 @@ func (s *ScanResultWithAdvice) CSV() []string {
 		for _, value := range s.Advice.DMARC {
 			advice += "DMARC: " + value + "; "
 		}
+		for _, value := range s.Advice.DNSSEC {
+			advice += "DNSSEC: " + value + "; "
+		}
+		for _, value := range s.Advice.MTASTS {
+			advice += "MTA-MTASTS: " + value + "; "
+		}
 		for _, value := range s.Advice.MX {
 			advice += "MX: " + value + "; "
 		}

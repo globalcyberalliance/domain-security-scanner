@@ -45,6 +45,16 @@ func WithConcurrentScans(quota uint16) Option {
 	}
 }
 
+func WithCheckTLS(checkTLS bool) Option {
+	return func(s *Scanner) error {
+		if s.advisor == nil {
+			return errors.New("advisor not initialized")
+		}
+		s.advisor.checkTLS = checkTLS
+		return nil
+	}
+}
+
 // WithDKIMSelectors allows the caller to specify which DKIM selectors to
 // scan for (falling back to the default selectors if none are provided).
 func WithDKIMSelectors(selectors ...string) Option {
@@ -60,7 +70,7 @@ func WithDKIMSelectors(selectors ...string) Option {
 			}
 		}
 
-		s.dnsClient.DkimSelectors = selectors
+		s.dnsClient.DKIMSelectors = selectors
 
 		return nil
 	}
@@ -86,7 +96,7 @@ func WithDNSProtocol(protocol string) Option {
 
 		switch protocol {
 		case "udp", "tcp", "tcp-tls":
-			s.dnsClient.Net = protocol
+			s.dnsClient.Protocol = protocol
 		default:
 			return fmt.Errorf("invalid DNS protocol: %s, valid options: udp, tcp, tcp-tls", protocol)
 		}
@@ -107,16 +117,6 @@ func WithNameservers(nameservers []string) Option {
 
 		s.dnsClient.Nameservers = nameservers
 
-		return nil
-	}
-}
-
-func WithCheckTLS(checkTLS bool) Option {
-	return func(s *Scanner) error {
-		if s.advisor == nil {
-			return errors.New("advisor not initialized")
-		}
-		s.advisor.checkTLS = checkTLS
 		return nil
 	}
 }

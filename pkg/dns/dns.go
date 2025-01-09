@@ -14,7 +14,6 @@ import (
 )
 
 const (
-	// Expose underlying dns library's constants for consumers.
 	TypeA     = dns.TypeA
 	TypeAAAA  = dns.TypeAAAA
 	TypeCNAME = dns.TypeCNAME
@@ -42,16 +41,17 @@ type (
 		// method.
 		lastNameserverID uint32
 
-		// nameservers is a slice of "host:port" strings of nameservers to issue queries against.
+		// Nameservers is a slice of "host:port" strings of nameservers to issue queries against.
 		Nameservers []string
 
-		Net string
+		// Protocol is used to track the initialized protocol, e.g. UDP or TCP.
+		Protocol string
 
-		DkimSelectors []string
+		DKIMSelectors []string
 	}
 )
 
-func New(timeout time.Duration, buffer uint16, cacheTimeout time.Duration, protocol string, nameservers ...string) (*Client, error) {
+func New(timeout time.Duration, buffer uint16, protocol string, nameservers ...string) (*Client, error) {
 	if timeout <= 0 {
 		return nil, errors.New("timeout must be greater than 0")
 	}
@@ -93,10 +93,10 @@ func ParseNameservers(nameservers []string) ([]string, error) {
 	// elements, load up /etc/resolv.conf, and get the "index"
 	// directives from there.
 	if len(nameservers) == 0 {
-		// check if /etc/resolv.conf exists
+		// Check if /etc/resolv.conf exists.
 		config, err := dns.ClientConfigFromFile("/etc/resolv.conf")
 		if err != nil {
-			// if /etc/resolv.conf does not exist, use Google and Cloudflare
+			// If /etc/resolv.conf does not exist, use Google and Cloudflare.
 			return []string{"8.8.8.8:53", "8.8.4.4:53", "1.1.1.1:53"}, nil
 		}
 
@@ -164,13 +164,3 @@ func ParseZone(zone io.Reader) []string {
 
 	return domains
 }
-
-/*
-func SetProtocal(client *Client, protocol string) {
-	client.client.Net = protocol
-}
-
-func GetNet(client *Client) string {
-	return client.client.Net
-}
-*/
