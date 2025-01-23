@@ -70,7 +70,7 @@ func (s *Scanner) getDNSRecords(domain string, recordType uint16) (records []str
 		case *dns.NS:
 			records = append(records, dnsRec.Ns)
 		case *dns.TXT:
-			records = append(records, dnsRec.Txt...)
+			records = append(records, strings.Join(dnsRec.Txt, " "))
 		}
 	}
 
