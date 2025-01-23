@@ -32,7 +32,7 @@ check-dependencies:
 		exit 1; \
 	fi
 	@if [ -z "${GOFIELDALIGNMENT}" ]; then \
-		echo "Cannot find 'fieldalignment' in your $$PATH"; \
+		echo "Cannot find 'betteralign' in your $$PATH"; \
 		exit 1; \
 	fi
 

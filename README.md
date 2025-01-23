@@ -18,7 +18,10 @@ docker run ghcr.io/globalcyberalliance/domain-security-scanner:latest
 
 ## Build
 
-To build this application, you'll need [Go](https://golang.org/) installed.
+To build this application, you'll need the following installed:
+
+- [Go](https://golang.org/)
+- [BetterAlign](https://github.com/dkorunic/betteralign) (unneeded if you run `make dev`)
 
 ```shell
 git clone https://github.com/globalcyberalliance/domain-security-scanner.git
@@ -84,7 +87,7 @@ this `http://server-ip:port/api/v1/scan/globalcyberalliance.org`, which will ret
       "alt3.aspmx.l.google.com.",
       "alt4.aspmx.l.google.com."
     ],
-    "spf": "v=spf1 include:_u.globalcyberalliance.org._spf.smart.ondmarc.com -all",
+    "spf": "v=spf1 include:_u.globalcyberalliance.org._spf.smart.ondmarc.com -all"
   },
   "advice": {
     "bimi": [
@@ -203,7 +206,8 @@ Which will return a JSON response like this:
 
 ## Serve Dedicated Mailbox
 
-You can also serve scan results via a dedicated mailbox. It is advised that you use this mailbox for this sole purpose, as all emails will be deleted at each 10 second interval.
+You can also serve scan results via a dedicated mailbox. It is advised that you use this mailbox for this sole purpose,
+as all emails will be deleted at each 10 second interval.
 
 ```shell
 dss serve mail --inboundHost "imap.gmail.com:993" --inboundPass "SomePassword" --inboundUser "SomeAddress@domain.tld" --outboundHost "smtp.gmail.com:587" --outboundPass "SomePassword" --outboundUser "SomeAddress@domain.tld" --advise
