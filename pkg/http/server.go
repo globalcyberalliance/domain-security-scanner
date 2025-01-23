@@ -43,6 +43,7 @@ func NewServer(logger zerolog.Logger, timeout time.Duration, version string) *Se
 	}
 
 	config := huma.DefaultConfig("Domain Security Scanner", version)
+	config.CreateHooks = nil
 	config.Info.Description = "The Domain Security Scanner can be used to perform scans against domains for DKIM, DMARC, and SPF DNS records. You can also serve this functionality via an API, or a dedicated mailbox. A web application is also available if organizations would like to perform a single domain scan for DKIM, DMARC or SPF at https://dmarcguide.globalcyberalliance.org."
 	config.DocsPath = "" // disable Huma's Stoplight handler
 	config.OpenAPIPath = "/api/v1/docs"
