@@ -64,7 +64,7 @@ func (s *Server) GetMail() (map[string]FoundMail, error) {
 	}()
 
 	addresses := make(map[string]FoundMail)
-	var emailsToBeDeleted []uint32
+	emailsToBeDeleted := make([]uint32, 0, len(messages))
 	for msg := range messages {
 		// DKIM
 		headerSection, _ := imap.ParseBodySectionName("RFC822.HEADER")

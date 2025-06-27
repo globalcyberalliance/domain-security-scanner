@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 	"net/http"
-	"runtime/debug"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -29,7 +28,7 @@ type Server struct {
 	Addr     string
 	CheckTLS bool
 
-	// Services used by the various HTTP routes
+	// Services used by the various HTTP routes.
 	Advisor *advisor.Advisor
 	Scanner *scanner.Scanner
 }
@@ -45,18 +44,18 @@ func NewServer(logger zerolog.Logger, timeout time.Duration, version string) *Se
 	config := huma.DefaultConfig("Domain Security Scanner", version)
 	config.CreateHooks = nil
 	config.Info.Description = "The Domain Security Scanner can be used to perform scans against domains for DKIM, DMARC, and SPF DNS records. You can also serve this functionality via an API, or a dedicated mailbox. A web application is also available if organizations would like to perform a single domain scan for DKIM, DMARC or SPF at https://dmarcguide.globalcyberalliance.org."
-	config.DocsPath = "" // disable Huma's Stoplight handler
+	config.DocsPath = "" // Disable Huma's Stoplight handler.
 	config.OpenAPIPath = "/api/v1/docs"
 
 	mux := chi.NewMux()
-	mux.Use(middleware.RedirectSlashes, middleware.RealIP, handleLogging(&logger), middleware.Recoverer)
+	mux.Use(middleware.RedirectSlashes, middleware.RealIP, server.handleLogging(), server.handleRequestCompression, server.handleResponseCompression, middleware.Recoverer)
 	mux.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST"},
 		AllowedHeaders:   []string{"Accept", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: false,
-		MaxAge:           300, // Maximum value not ignored by any of major browsers
+		MaxAge:           300, // Maximum value not ignored by any of major browsers.
 	}))
 	mux.Use(httprate.Limit(5, 3*time.Second,
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
@@ -67,14 +66,14 @@ func NewServer(logger zerolog.Logger, timeout time.Duration, version string) *Se
 			}
 
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(429)
+			w.WriteHeader(http.StatusTooManyRequests)
 			if _, err = w.Write(response); err != nil {
 				return
 			}
 		}),
 	))
 	mux.NotFound(func(w http.ResponseWriter, r *http.Request) {
-		// redirect to the API docs
+		// Redirect to the API docs.
 		http.Redirect(w, r, server.apiPath+"/docs", http.StatusFound)
 	})
 	mux.Handle("/api/v1/version", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +108,7 @@ func (s *Server) Serve(port int) {
 	httpServer := &http.Server{
 		Addr:         "0.0.0.0:" + portString,
 		Handler:      s.router.Adapter(),
-		WriteTimeout: 4 * s.timeout, // timeout is used by the scanner per request, so multiply it by 4 to allow for bulk requests
+		WriteTimeout: 4 * s.timeout, // WriteTimeout is used by the scanner per request, so multiply it by 4 to allow for bulk requests.
 	}
 
 	s.logger.Info().Msg("Starting api server on port " + portString)
@@ -134,37 +133,4 @@ func (s *Server) registerVersionRoute(version string) {
 		resp.Body.Version = version
 		return &resp, nil
 	})
-}
-
-func handleLogging(logger *zerolog.Logger) func(next http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			wrappedWriter := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
-			startTime := time.Now()
-
-			defer func() {
-				if rec := recover(); rec != nil {
-					logger.Error().
-						Str("type", "error").
-						Timestamp().
-						Interface("recover_info", rec).
-						Bytes("debug_stack", debug.Stack()).
-						Msg("system error")
-					http.Error(wrappedWriter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-				}
-
-				logger.Info().
-					Timestamp().
-					Fields(map[string]interface{}{
-						"ip":      r.RemoteAddr,
-						"method":  r.Method,
-						"url":     r.URL.Path,
-						"status":  wrappedWriter.Status(),
-						"latency": time.Since(startTime).Round(time.Millisecond).String(),
-					}).Msg("request")
-			}()
-
-			next.ServeHTTP(wrappedWriter, r)
-		})
-	}
 }

@@ -170,7 +170,7 @@ func (s *Scanner) getTypeDMARC(domain string) (string, error) {
 		}
 
 		for index, record := range records {
-			if DMARCPrefix.Match([]byte(record)) {
+			if DMARCPrefix.MatchString(record) {
 				// TXT records can be split across multiple strings, so we need to join them
 				return strings.Join(records[index:], ""), nil
 			}
@@ -189,7 +189,7 @@ func (s *Scanner) getTypeSPF(domain string) (string, error) {
 	}
 
 	for _, record := range records {
-		if SPFPrefix.Match([]byte(record)) {
+		if SPFPrefix.MatchString(record) {
 			if !strings.Contains(record, "redirect=") {
 				return record, nil
 			}

@@ -86,7 +86,7 @@ func New(logger zerolog.Logger, timeout time.Duration, opts ...Option) (*Scanner
 		dnsClient:   dnsClient,
 		dnsBuffer:   4096,
 		logger:      logger,
-		nameservers: []string{"8.8.8.8:53", "8.8.4.4:53", "1.1.1.1:53"}, // Set the default nameservers to Google and Cloudflare
+		nameservers: []string{"8.8.8.8:53", "8.8.4.4:53", "1.1.1.1:53"}, // Set the default nameservers to Google and Cloudflare.
 		poolSize:    uint16(runtime.NumCPU()),
 	}
 
@@ -96,10 +96,10 @@ func New(logger zerolog.Logger, timeout time.Duration, opts ...Option) (*Scanner
 		}
 	}
 
-	// Initialize cache
+	// Initialize cache.
 	scanner.cache = cache.New[Result](scanner.cacheDuration)
 
-	// Create a new pool of workers for the scanner
+	// Create a new pool of workers for the scanner.
 	pool, err := ants.NewPool(int(scanner.poolSize), ants.WithExpiryDuration(timeout), ants.WithPanicHandler(func(err interface{}) {
 		scanner.logger.Error().Err(errors.New(cast.ToString(err))).Msg("unrecoverable panic occurred while analysing pcap")
 	}))
@@ -162,13 +162,13 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 				}()
 			}
 
-			// check that the domain name is valid
+			// Check that the domain name is valid.
 			result.NS, err = s.getDNSRecords(domainToScan, dns.TypeNS)
 			if err != nil || len(result.NS) == 0 {
-				// check if TXT records exist, as the nameserver check won't work for subdomains
+				// Check if TXT records exist, as the nameserver check won't work for subdomains.
 				records, err := s.getDNSAnswers(domainToScan, dns.TypeTXT)
 				if err != nil || len(records) == 0 {
-					// fill variable to satisfy deferred cache fill
+					// Fill variable to satisfy deferred cache fill.
 					result = &Result{
 						Domain: domainToScan,
 						Error:  ErrInvalidDomain,
@@ -186,7 +186,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 			scanWg := sync.WaitGroup{}
 			scanWg.Add(5)
 
-			// Get BIMI record
+			// Get BIMI record.
 			go func() {
 				defer scanWg.Done()
 				result.BIMI, err = s.getTypeBIMI(domainToScan)
@@ -195,7 +195,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 				}
 			}()
 
-			// Get DKIM record
+			// Get DKIM record.
 			go func() {
 				defer scanWg.Done()
 				result.DKIM, err = s.getTypeDKIM(domainToScan)
@@ -204,7 +204,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 				}
 			}()
 
-			// Get DMARC record
+			// Get DMARC record.
 			go func() {
 				defer scanWg.Done()
 				result.DMARC, err = s.getTypeDMARC(domainToScan)
@@ -213,7 +213,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 				}
 			}()
 
-			// Get MX records
+			// Get MX records.
 			go func() {
 				defer scanWg.Done()
 				result.MX, err = s.getDNSRecords(domainToScan, dns.TypeMX)
@@ -222,7 +222,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 				}
 			}()
 
-			// Get SPF record
+			// Get SPF record.
 			go func() {
 				defer scanWg.Done()
 				result.SPF, err = s.getTypeSPF(domainToScan)
@@ -258,7 +258,7 @@ func (s *Scanner) ScanZone(zone io.Reader) ([]*Result, error) {
 	zoneParser := dns.NewZoneParser(zone, "", "")
 	zoneParser.SetIncludeAllowed(true)
 
-	var domains []string
+	domains := make([]string, 0, 6)
 
 	for tok, ok := zoneParser.Next(); ok; tok, ok = zoneParser.Next() {
 		if tok.Header().Rrtype == dns.TypeNS {
@@ -267,7 +267,7 @@ func (s *Scanner) ScanZone(zone io.Reader) ([]*Result, error) {
 
 		domain := strings.Trim(tok.Header().Name, ".")
 		if !strings.Contains(domain, ".") {
-			// we have an NS record that serves as an anchor, and should skip it
+			// We have an NS record that serves as an anchor, and should skip it.
 			continue
 		}
 
@@ -277,7 +277,7 @@ func (s *Scanner) ScanZone(zone io.Reader) ([]*Result, error) {
 	return s.Scan(domains...)
 }
 
-// Close closes the scanner
+// Close closes the scanner.
 func (s *Scanner) Close() {
 	s.pool.Release()
 	s.cache.Flush()

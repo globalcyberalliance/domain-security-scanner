@@ -1,18 +1,31 @@
-FROM golang:1.23.1-alpine3.20 AS build
+FROM golang:1.24-alpine3.21 AS build
 
 RUN apk add git make \
- && apk cache clean \
- && go install github.com/dkorunic/betteralign/cmd/betteralign@latest
+ && apk cache clean
 
-COPY . /go/src/github.com/globalcyberalliance/domain-security-scanner/
+WORKDIR /src
 
-WORKDIR /go/src/github.com/globalcyberalliance/domain-security-scanner/
+# Install setup dependencies (e.g. betteralign)
+COPY Makefile ./
+RUN make setup
+
+# Cache Go modules and local vendored dependencies needed for replacements
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . /src
 
 RUN make
 
 FROM scratch
 
-COPY --from=build /go/src/github.com/globalcyberalliance/domain-security-scanner/bin/dss /dss
+COPY --from=build /src/bin/dss /usr/bin/dss
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
-ENTRYPOINT [ "/dss" ]
+WORKDIR /app
+
+EXPOSE 8080
+
+ENTRYPOINT ["dss"]
+
+CMD ["serve", "api"]
