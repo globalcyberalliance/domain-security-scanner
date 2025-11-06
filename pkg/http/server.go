@@ -18,6 +18,8 @@ import (
 	"github.com/spf13/cast"
 )
 
+const DefaultRateLimit = 5
+
 // Server represents the HTTP server.
 type Server struct {
 	apiPath string
@@ -34,7 +36,7 @@ type Server struct {
 }
 
 // NewServer returns a new instance of Server.
-func NewServer(logger zerolog.Logger, timeout time.Duration, version string) *Server {
+func NewServer(logger zerolog.Logger, timeout time.Duration, rateLimit int, version string) *Server {
 	server := Server{
 		apiPath: "/api/v1",
 		logger:  logger,
@@ -47,6 +49,10 @@ func NewServer(logger zerolog.Logger, timeout time.Duration, version string) *Se
 	config.DocsPath = "" // Disable Huma's Stoplight handler.
 	config.OpenAPIPath = "/api/v1/docs"
 
+	if rateLimit <= 0 {
+		rateLimit = DefaultRateLimit
+	}
+
 	mux := chi.NewMux()
 	mux.Use(middleware.RedirectSlashes, middleware.RealIP, server.handleLogging(), server.handleRequestCompression, server.handleResponseCompression, middleware.Recoverer)
 	mux.Use(cors.Handler(cors.Options{
@@ -57,7 +63,7 @@ func NewServer(logger zerolog.Logger, timeout time.Duration, version string) *Se
 		AllowCredentials: false,
 		MaxAge:           300, // Maximum value not ignored by any of major browsers.
 	}))
-	mux.Use(httprate.Limit(5, 3*time.Second,
+	mux.Use(httprate.Limit(rateLimit, 3*time.Second,
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
 			response, err := json.Marshal(huma.Error429TooManyRequests("try again later"))
 			if err != nil {

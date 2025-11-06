@@ -16,6 +16,7 @@ func init() {
 	cmdServe.AddCommand(cmdServeMail)
 
 	cmdServeAPI.Flags().IntVarP(&port, "port", "p", 8080, "Specify the port for the API to listen on")
+	cmdServeAPI.Flags().IntVar(&rateLimit, "rateLimit", 5, "Specify the rate limit for API requests")
 
 	cmdServeMail.Flags().StringVar(&mailConfig.Inbound.Host, "inboundHost", "", "Incoming mail host and port")
 	cmdServeMail.Flags().StringVar(&mailConfig.Inbound.Pass, "inboundPass", "", "Incoming mail password")
@@ -31,9 +32,9 @@ func init() {
 }
 
 var (
-	interval   time.Duration
-	port       int
-	mailConfig mail.Config
+	interval        time.Duration
+	port, rateLimit int
+	mailConfig      mail.Config
 
 	cmdServe = &cobra.Command{
 		Use:   "serve",
@@ -64,7 +65,7 @@ var (
 				log.Fatal().Err(err).Msg("could not create domain scanner")
 			}
 
-			server := http.NewServer(log, timeout, cmd.Version)
+			server := http.NewServer(log, timeout, rateLimit, cmd.Version)
 			if advise {
 				server.Advisor = advisor.NewAdvisor(timeout, cache, checkTLS)
 			}
