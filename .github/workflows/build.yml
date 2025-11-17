@@ -1,18 +1,41 @@
 name: Build
-on: pull_request
+
+on:
+  push:
+  pull_request:
 
 jobs:
-  build:
-    name: Build
+  go-build:
+    name: Build Go Binary
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repo
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build
+      - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '^1.22.0'
-      - run: |
-          cd cmd/dss
-          go build -o dss
+          go-version: '1.25.x'
+
+      - name: Build binary
+        run: make dev
+
+  docker-build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          tags: test-image:ci   # Just a local tag.
