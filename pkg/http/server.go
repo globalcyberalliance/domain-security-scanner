@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
@@ -56,15 +57,15 @@ func NewServer(logger zerolog.Logger, timeout time.Duration, rateLimit int, vers
 	mux := chi.NewMux()
 	mux.Use(middleware.RedirectSlashes, middleware.RealIP, server.handleLogging(), server.handleRequestCompression, server.handleResponseCompression, middleware.Recoverer)
 	mux.Use(cors.Handler(cors.Options{
+		AllowCredentials: false,
+		AllowedHeaders:   []string{"Accept", "Content-Type", "X-CSRF-Token"},
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST"},
-		AllowedHeaders:   []string{"Accept", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
-		AllowCredentials: false,
-		MaxAge:           300, // Maximum value not ignored by any of major browsers.
+		MaxAge:           300, // The maximum value not ignored by any of the major browsers.
 	}))
 	mux.Use(httprate.Limit(rateLimit, 3*time.Second,
-		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
+		httprate.WithLimitHandler(func(w http.ResponseWriter, _ *http.Request) {
 			response, err := json.Marshal(huma.Error429TooManyRequests("try again later"))
 			if err != nil {
 				http.Error(w, "an error occurred", http.StatusInternalServerError)
@@ -82,7 +83,7 @@ func NewServer(logger zerolog.Logger, timeout time.Duration, rateLimit int, vers
 		// Redirect to the API docs.
 		http.Redirect(w, r, server.apiPath+"/docs", http.StatusFound)
 	})
-	mux.Handle("/api/v1/version", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/api/v1/version", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if _, err := w.Write([]byte(`{"version":"` + version + `"}`)); err != nil {
 			return
@@ -96,7 +97,7 @@ func NewServer(logger zerolog.Logger, timeout time.Duration, rateLimit int, vers
 	}, func(ctx huma.Context) {
 		ctx.SetHeader("Content-Type", "text/html")
 		if _, err := ctx.BodyWriter().Write([]byte(`<!doctype html><html lang="en"><head><title>Domain Security Scanner - API Reference</title><meta charset="utf-8"><meta content="width=device-width,initial-scale=1" name="viewport"></head><body><script data-url="` + server.apiPath + `/docs.json" id="api-reference"></script><script>let apiReference = document.getElementById("api-reference")</script><script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script></body></html>`)); err != nil {
-			server.logger.Error().Err(err).Msg("an error occurred while serving the API documentation")
+			server.logger.Error().Err(err).Msg("An error occurred while serving the API documentation")
 		}
 	})
 	server.registerVersionRoute(version)
@@ -110,15 +111,26 @@ func (s *Server) Serve(port int) {
 		port = 8080
 	}
 
+	var (
+		idleTimeout       = s.timeout
+		readHeaderTimeout = s.timeout
+		readTimeout       = s.timeout * 4
+		writeTimeout      = s.timeout * 4
+	)
+
 	portString := cast.ToString(port)
 	httpServer := &http.Server{
-		Addr:         "0.0.0.0:" + portString,
-		Handler:      s.router.Adapter(),
-		WriteTimeout: 4 * s.timeout, // WriteTimeout is used by the scanner per request, so multiply it by 4 to allow for bulk requests.
+		Addr:              "0.0.0.0:" + portString,
+		ErrorLog:          log.New(&httpLogger{s.logger}, "", 0),
+		Handler:           s.router.Adapter(),
+		IdleTimeout:       idleTimeout,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
 	}
 
 	s.logger.Info().Msg("Starting api server on port " + portString)
-	s.logger.Fatal().Err(httpServer.ListenAndServe()).Msg("an error occurred while hosting the api server")
+	s.logger.Fatal().Err(httpServer.ListenAndServe()).Msg("An error occurred while hosting the api server")
 }
 
 func (s *Server) registerVersionRoute(version string) {
@@ -134,9 +146,19 @@ func (s *Server) registerVersionRoute(version string) {
 		Method:      http.MethodGet,
 		Path:        s.apiPath + "/version",
 		Tags:        []string{"Version"},
-	}, func(ctx context.Context, input *struct{}) (*VersionResponse, error) {
+	}, func(_ context.Context, _ *struct{}) (*VersionResponse, error) {
 		resp := VersionResponse{}
 		resp.Body.Version = version
 		return &resp, nil
 	})
+}
+
+// httpLogger satisfies the http.Server.ErrorLog interface, and adapts it to use our global zerolog logger.
+type httpLogger struct {
+	logger zerolog.Logger
+}
+
+func (l *httpLogger) Write(p []byte) (n int, err error) {
+	l.logger.Debug().Msg(string(p))
+	return len(p), nil
 }

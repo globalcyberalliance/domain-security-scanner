@@ -44,7 +44,7 @@ func NewMailServer(config Config, logger zerolog.Logger, sc *scanner.Scanner, ad
 	defer client.Logout()
 
 	if err = s.initializeTemplates(); err != nil {
-		return nil, fmt.Errorf("failed to initialize mail templates: %w", err)
+		return nil, fmt.Errorf("initialize mail templates: %w", err)
 	}
 
 	return &s, nil
@@ -57,7 +57,7 @@ func (s *Server) Serve(interval time.Duration) {
 	s.logger.Info().Msg("Mail check interval set to " + cast.ToString(interval*time.Second))
 
 	if err := s.handler(); err != nil {
-		s.logger.Fatal().Err(err).Msg("an error occurred while hosting the mail server")
+		s.logger.Fatal().Err(err).Msg("An error occurred while hosting the mail server")
 	}
 }
 
@@ -71,7 +71,7 @@ func (s *Server) handler() error {
 
 			addresses, err := s.GetMail()
 			if err != nil && err.Error() != "no new messages" {
-				s.logger.Error().Err(err).Msg("could not obtain the latest mail from mail server")
+				s.logger.Error().Err(err).Msg("Could not obtain the latest mail from mail server")
 			}
 
 			var dkimSelectors, domainList []string
@@ -96,7 +96,7 @@ func (s *Server) handler() error {
 
 			if len(dkimSelectors) > 0 {
 				if err = s.Scanner.OverwriteOption(scanner.WithDKIMSelectors(dkimSelectors...)); err != nil {
-					s.logger.Error().Err(err).Msg("failed to override DKIM selectors for mail")
+					s.logger.Error().Err(err).Msg("Failed to override DKIM selectors for mail")
 				}
 			}
 

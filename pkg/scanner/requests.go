@@ -38,18 +38,20 @@ var (
 
 // getDNSRecords queries the DNS server for records of a specific type for a domain.
 // It returns a slice of strings (the records) and an error if any occurred.
-func (s *Scanner) getDNSRecords(domain string, recordType uint16) (records []string, err error) {
+func (s *Scanner) getDNSRecords(domain string, recordType uint16) ([]string, error) {
 	answers, err := s.getDNSAnswers(domain, recordType)
 	if err != nil {
 		return nil, err
 	}
+
+	var records []string
 
 	for _, answer := range answers {
 		if answer.Header().Rrtype == dns.TypeCNAME {
 			if t, ok := answer.(*dns.CNAME); ok {
 				recursiveLookupTxt, err := s.getDNSRecords(t.Target, recordType)
 				if err != nil {
-					return nil, fmt.Errorf("failed to recursively lookup txt record for %v: %w", t.Target, err)
+					return nil, fmt.Errorf("recursively lookup txt record for %v: %w", t.Target, err)
 				}
 
 				records = append(records, recursiveLookupTxt...)
@@ -88,7 +90,7 @@ func (s *Scanner) getDNSAnswers(domain string, recordType uint16) ([]dns.RR, err
 
 	in, _, err := s.dnsClient.Exchange(req, s.getNS())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dns exchange: %w", err)
 	}
 
 	if in.Rcode != dns.RcodeSuccess {
@@ -107,7 +109,7 @@ func (s *Scanner) getDNSAnswers(domain string, recordType uint16) ([]dns.RR, err
 
 		in, _, err = s.dnsClient.Exchange(req, s.getNS())
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("dns exchange: %w", err)
 		}
 	}
 

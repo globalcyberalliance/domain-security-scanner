@@ -38,13 +38,13 @@ type (
 func (s *Server) GetMail() (map[string]FoundMail, error) {
 	client, err := s.Login()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("login: %w", err)
 	}
 	defer client.Logout()
 
 	mailbox, err := client.Select("INBOX", false)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open mailbox: %w", err)
 	}
 
 	// check for new emails
@@ -120,18 +120,18 @@ func (s *Server) GetMail() (map[string]FoundMail, error) {
 	}
 
 	// Mark messages as deleted
-	flags := []interface{}{imap.DeletedFlag}
+	flags := []any{imap.DeletedFlag}
 	item := imap.FormatFlagsOp(imap.AddFlags, true)
 	seqSet := new(imap.SeqSet)
 	seqSet.AddNum(emailsToBeDeleted...)
 
 	if err = client.Store(seqSet, item, flags, nil); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("store: %w", err)
 	}
 
 	// Permanently delete all marked emails
 	if err = client.Expunge(nil); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("expunge: %w", err)
 	}
 
 	if len(addresses) == 0 {
@@ -145,11 +145,11 @@ func (s *Server) GetMail() (map[string]FoundMail, error) {
 func (s *Server) Login() (*imapClient.Client, error) {
 	client, err := imapClient.DialTLS(s.config.Inbound.Host, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dial: %w", err)
 	}
 
 	if err = client.Login(s.config.Inbound.User, s.config.Inbound.Pass); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("login: %w", err)
 	}
 
 	return client, nil
@@ -167,11 +167,11 @@ func (s *Server) SendMail(mailbox string, result model.ScanResultWithAdvice) err
 	m.Subject("Email Security Scan Results")
 
 	if err = m.From(s.config.Outbound.User); err != nil {
-		return fmt.Errorf("failed to set From address: %w", err)
+		return fmt.Errorf("set From address: %w", err)
 	}
 
 	if err = m.To(mailbox); err != nil {
-		return fmt.Errorf("failed to set To address: %w", err)
+		return fmt.Errorf("set To address: %w", err)
 	}
 
 	m.SetBodyString(mail.TypeTextPlain, plaintext)
@@ -179,23 +179,25 @@ func (s *Server) SendMail(mailbox string, result model.ScanResultWithAdvice) err
 
 	host, port, err := net.SplitHostPort(s.config.Outbound.Host)
 	if err != nil {
-		return fmt.Errorf("failed to split host and port: %w", err)
+		return fmt.Errorf("split host and port: %w", err)
 	}
 
 	client, err := mail.NewClient(host, mail.WithPort(cast.ToInt(port)), mail.WithSMTPAuth(mail.SMTPAuthPlain),
 		mail.WithUsername(s.config.Outbound.User), mail.WithPassword(s.config.Outbound.Pass))
 	if err != nil {
-		return fmt.Errorf("failed to create mail client: %w", err)
+		return fmt.Errorf("create mail client: %w", err)
 	}
 
 	if err = client.DialAndSend(m); err != nil {
-		return fmt.Errorf("failed to send mail: %w", err)
+		return fmt.Errorf("send mail: %w", err)
 	}
 
 	return nil
 }
 
-func stringify(array []string) (result string) {
+func stringify(array []string) string {
+	var result string
+
 	if len(array) > 0 {
 		for _, s := range array {
 			if len(result) == 0 {

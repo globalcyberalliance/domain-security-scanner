@@ -129,7 +129,7 @@ func (a *Advisor) CheckBIMI(bimi string) (advice []string) {
 				svgFound = true
 				tagValue := strings.TrimPrefix(tag, "l=")
 
-				// download SVG logo
+				// Download SVG logo.
 				response, err := http.Head(tagValue)
 				if err != nil || response == nil {
 					advice = append(advice, "Your SVG logo could not be downloaded.")
@@ -181,16 +181,18 @@ func (a *Advisor) CheckBIMI(bimi string) (advice []string) {
 		return []string{"Your BIMI record looks good! No further action needed."}
 	}
 
-	// prepend a message detailing that the BIMI record has some issues
+	// Prepend a message detailing that the BIMI record has some issues.
 	advice = append([]string{"Your BIMI record has some issues:"}, advice...)
 
 	return advice
 }
 
-func (a *Advisor) CheckDKIM(dkim string) (advice []string) {
+func (a *Advisor) CheckDKIM(dkim string) []string {
 	if dkim == "" {
 		return []string{"We couldn't detect any active DKIM record for your domain. Due to how DKIM works, we only lookup common/known DKIM selectors (such as x, selector1, google). Visit https://dmarcguide.globalcyberalliance.org for more info on how to configure DKIM for your domain."}
 	}
+
+	var advice []string
 
 	if strings.Contains(dkim, ";") {
 		dkimResult := strings.Split(dkim, ";")
@@ -360,13 +362,15 @@ func (a *Advisor) CheckDMARC(record string) (advice []string) {
 	return dmarcRecord.Advice
 }
 
-func (a *Advisor) CheckDomain(domain string) (advice []string) {
+func (a *Advisor) CheckDomain(domain string) []string {
 	a.consumerDomainsMutex.Lock()
 	if _, ok := a.consumerDomains[domain]; ok {
 		a.consumerDomainsMutex.Unlock()
 		return []string{"Consumer based accounts (i.e gmail.com, yahoo.com, etc) are controlled by the vendor. They are responsible for setting DKIM, SPF and DMARC capabilities on their domains."}
 	}
 	a.consumerDomainsMutex.Unlock()
+
+	var advice []string
 
 	if a.checkTLS {
 		advice = append(advice, a.checkHostTLS(domain, 443)...)
@@ -379,7 +383,9 @@ func (a *Advisor) CheckDomain(domain string) (advice []string) {
 	return advice
 }
 
-func (a *Advisor) CheckMX(mx []string) (advice []string) {
+func (a *Advisor) CheckMX(mx []string) []string {
+	var advice []string
+
 	switch len(mx) {
 	case 0:
 		return []string{"You do not have any mail servers setup, so you cannot receive email at this domain."}
@@ -391,10 +397,10 @@ func (a *Advisor) CheckMX(mx []string) (advice []string) {
 
 	if a.checkTLS {
 		for _, serverAddress := range mx {
-			// prepend the hostname to the advice line
-			mxAdvice := a.checkMailTls(serverAddress)
+			// Prepend the hostname to the advice line.
+			mxAdvice := a.checkMailTLS(serverAddress)
 			for _, serverAdvice := range mxAdvice {
-				// strip the trailing dot from DNS records
+				// Strip the trailing dot from DNS records.
 				advice = append(advice, serverAddress[:len(serverAddress)-1]+": "+serverAdvice)
 			}
 		}
@@ -431,6 +437,10 @@ func (a *Advisor) CheckSPF(spf string) []string {
 		if strings.Contains(spf, "+all") {
 			return []string{"Your SPF record contains the +all tag. It is strongly recommended that this be changed to either -all or ~all. The +all tag allows for any system regardless of SPF to send mail on the organization’s behalf."}
 		}
+
+		if strings.Contains(spf, "~all") {
+			return []string{"SPF seems to be setup correctly, but it's recommended that you change from SoftFail (~all) to HardFail (-all)"}
+		}
 	} else {
 		return []string{"Your SPF record is missing the all tag. Please visit https://dmarcguide.globalcyberalliance.org to fix this."}
 	}
@@ -438,19 +448,21 @@ func (a *Advisor) CheckSPF(spf string) []string {
 	return []string{"SPF seems to be setup correctly! No further action needed."}
 }
 
-func (a *Advisor) checkHostTLS(hostname string, port int) (advice []string) {
-	// strip the trailing dot from DNS records
+func (a *Advisor) checkHostTLS(hostname string, port int) []string {
+	// Strip the trailing dot from DNS records.
 	if string(hostname[len(hostname)-1]) == "." {
 		hostname = hostname[:len(hostname)-1]
 	}
 
-	// check if the advice is already in the cache
+	// Check if the advice is already in the cache.
 	tlsAdvice := a.tlsCacheHost.Get(hostname)
 	if tlsAdvice != nil {
 		return *tlsAdvice
 	}
 
-	// set the advice in the cache after the function returns
+	var advice []string
+
+	// Set the advice in the cache after the function returns.
 	defer func() {
 		a.tlsCacheHost.Set(hostname, &advice)
 	}()
@@ -462,12 +474,12 @@ func (a *Advisor) checkHostTLS(hostname string, port int) (advice []string) {
 	conn, err := tls.DialWithDialer(a.dialer, "tcp", hostname+":"+cast.ToString(port), nil)
 	if err != nil {
 		if strings.Contains(err.Error(), "no such host") {
-			// fill variable to satisfy deferred cache fill
+			// Fill variable to satisfy deferred cache fill.
 			advice = []string{hostname + " could not be reached"}
 			return advice
 		}
 
-		if strings.Contains(err.Error(), "certificate is not trusted") || strings.Contains(err.Error(), "failed to verify certificate") {
+		if strings.Contains(err.Error(), "certificate is not trusted") || strings.Contains(err.Error(), "verify certificate") {
 			advice = append(advice, "No valid certificate could be found.")
 
 			conn, err = tls.DialWithDialer(a.dialer, "tcp", hostname+":"+cast.ToString(port), &tls.Config{InsecureSkipVerify: true})
@@ -485,30 +497,31 @@ func (a *Advisor) checkHostTLS(hostname string, port int) (advice []string) {
 	return advice
 }
 
-func (a *Advisor) checkMailTls(hostname string) (advice []string) {
-	// strip the trailing dot from DNS records
+func (a *Advisor) checkMailTLS(hostname string) []string {
+	// Strip the trailing dot from DNS records.
 	if string(hostname[len(hostname)-1]) == "." {
 		hostname = hostname[:len(hostname)-1]
 	}
 
-	// check if the advice is already in the cache
+	// Check if the advice is already in the cache.
 	tlsAdvice := a.tlsCacheMail.Get(hostname)
 	if tlsAdvice != nil {
 		return *tlsAdvice
 	}
 
-	// set the advice in the cache after the function returns
+	var advice []string
+
+	// Set the advice in the cache after the function returns.
 	defer func() {
 		a.tlsCacheMail.Set(hostname, &advice)
 	}()
 
 	conn, err := a.dialer.Dial("tcp", hostname+":25")
 	if err != nil {
-		// fill variable to satisfy deferred cache fill
+		// Fill variable to satisfy deferred cache fill.
+		advice = []string{"Failed to reach domain"}
 		if strings.Contains(err.Error(), "i/o timeout") {
 			advice = []string{"Failed to reach domain before timeout"}
-		} else {
-			advice = []string{"Failed to reach domain"}
 		}
 
 		return advice
@@ -528,19 +541,20 @@ func (a *Advisor) checkMailTls(hostname string) (advice []string) {
 	}
 
 	if err = client.StartTLS(tlsConfig); err != nil {
-		if strings.Contains(err.Error(), "certificate is not trusted") || strings.Contains(err.Error(), "failed to verify certificate") {
+		if strings.Contains(err.Error(), "certificate is not trusted") || strings.Contains(err.Error(), "verify certificate") {
 			advice = append(advice, "No valid certificate could be found.")
 
-			// close the existing connection and create a new one as we can't reuse it in the same way as the checkHostTLS function
+			// Close the existing connection and create a new one as we can't reuse it in the same way as the
+			// checkHostTLS function.
 			if err = conn.Close(); err != nil {
-				// fill variable to satisfy deferred cache fill
+				// Fill variable to satisfy deferred cache fill.
 				advice = append(advice, "Failed to re-attempt connection without certificate verification")
 				return advice
 			}
 
 			conn, err = a.dialer.Dial("tcp", hostname+"25")
 			if err != nil {
-				// fill variable to satisfy deferred cache fill
+				// Fill variable to satisfy deferred cache fill.
 				advice = []string{"Failed to reach domain"}
 				return advice
 			}
@@ -548,20 +562,20 @@ func (a *Advisor) checkMailTls(hostname string) (advice []string) {
 
 			client, err = smtp.NewClient(conn, hostname)
 			if err != nil {
-				// fill variable to satisfy deferred cache fill
+				// Fill variable to satisfy deferred cache fill.
 				advice = []string{"Failed to reach domain"}
 				return advice
 			}
 
-			// retry with InsecureSkipVerify
+			// Retry with InsecureSkipVerify.
 			tlsConfig.InsecureSkipVerify = true
 			if err = client.StartTLS(tlsConfig); err != nil {
-				// fill variable to satisfy deferred cache fill
+				// Fill variable to satisfy deferred cache fill.
 				advice = append(advice, "Failed to start TLS connection")
 				return advice
 			}
 		} else {
-			// fill variable to satisfy deferred cache fill
+			// Fill variable to satisfy deferred cache fill.
 			advice = []string{"Failed to start TLS connection: " + err.Error()}
 			return advice
 		}

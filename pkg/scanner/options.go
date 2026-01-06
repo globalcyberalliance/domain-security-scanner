@@ -97,19 +97,17 @@ func WithDNSProtocol(protocol string) Option {
 	}
 }
 
-// WithNameservers allows the caller to provide a custom set of nameservers for
-// a *Scanner to use. If ns is nil, or zero-length, the *Scanner will use
-// the nameservers specified in /etc/resolv.conf.
+// WithNameservers allows the caller to provide a custom set of nameservers for a *Scanner to use. If ns is nil, or
+// zero-length, the *Scanner will use the nameservers specified in /etc/resolv.conf.
 func WithNameservers(nameservers []string) Option {
 	return func(s *Scanner) error {
-		// If the provided slice of nameservers is nil, or has zero
-		// elements, load up /etc/resolv.conf, and get the "index"
-		// directives from there.
+		// If the provided slice of nameservers is nil, or has zero elements, load up /etc/resolv.conf, and get the
+		// "index" directives from there.
 		if len(nameservers) == 0 {
-			// check if /etc/resolv.conf exists
+			// Check if /etc/resolv.conf exists.
 			config, err := dns.ClientConfigFromFile("/etc/resolv.conf")
 			if err != nil {
-				// if /etc/resolv.conf does not exist, use Google and Cloudflare
+				// If /etc/resolv.conf does not exist, use Google and Cloudflare.
 				s.nameservers = []string{"8.8.8.8:53", "8.8.4.4:53", "1.1.1.1:53"}
 				return nil
 			}
@@ -119,18 +117,17 @@ func WithNameservers(nameservers []string) Option {
 
 		// Make sure each of the nameservers is in the "host:port" format.
 		//
-		// The "dns" package requires that you explicitly state the port
-		// number for the resolvers that get queried.
+		// The "dns" package requires that you explicitly state the port number for the resolvers that get queried.
 		for index := range nameservers {
 			addr, err := netip.ParseAddr(nameservers[index])
 			if err != nil {
-				// might contain a port
+				// The nameserver might contain a port.
 				host, port, err := net.SplitHostPort(nameservers[index])
 				if err != nil {
 					return fmt.Errorf("invalid IP address: %s", nameservers[index])
 				}
 
-				// validate IP
+				// Validate the IP.
 				addr, err = netip.ParseAddr(host)
 				if err != nil {
 					return fmt.Errorf("invalid IP address: %s", nameservers[index])

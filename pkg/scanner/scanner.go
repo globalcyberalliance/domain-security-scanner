@@ -100,11 +100,11 @@ func New(logger zerolog.Logger, timeout time.Duration, opts ...Option) (*Scanner
 	scanner.cache = cache.New[Result](scanner.cacheDuration)
 
 	// Create a new pool of workers for the scanner.
-	pool, err := ants.NewPool(int(scanner.poolSize), ants.WithExpiryDuration(timeout), ants.WithPanicHandler(func(err interface{}) {
-		scanner.logger.Error().Err(errors.New(cast.ToString(err))).Msg("unrecoverable panic occurred while analysing pcap")
+	pool, err := ants.NewPool(int(scanner.poolSize), ants.WithExpiryDuration(timeout), ants.WithPanicHandler(func(err any) {
+		scanner.logger.Error().Err(errors.New(cast.ToString(err))).Msg("Unrecoverable panic occurred while analysing pcap")
 	}))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create scanner pool: %w", err)
+		return nil, fmt.Errorf("create scanner pool: %w", err)
 	}
 
 	scanner.pool = pool
@@ -148,14 +148,14 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 			if s.cache != nil {
 				scanResult := s.cache.Get(domainToScan)
 				if scanResult != nil {
-					s.logger.Debug().Msg("cache hit for " + domainToScan)
+					s.logger.Debug().Msg("Cache hit for " + domainToScan)
 					mutex.Lock()
 					results = append(results, scanResult)
 					mutex.Unlock()
 					return
 				}
 
-				s.logger.Debug().Msg("cache miss for " + domainToScan)
+				s.logger.Debug().Msg("Cache miss for " + domainToScan)
 
 				defer func() {
 					s.cache.Set(domainToScan, result)
@@ -241,7 +241,7 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 			results = append(results, result)
 			mutex.Unlock()
 		}); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("add %s to scanner pool: %w", domainToScan, err)
 		}
 	}
 
@@ -281,7 +281,7 @@ func (s *Scanner) ScanZone(zone io.Reader) ([]*Result, error) {
 func (s *Scanner) Close() {
 	s.pool.Release()
 	s.cache.Flush()
-	s.logger.Debug().Msg("scanner closed")
+	s.logger.Debug().Msg("Scanner closed")
 }
 
 func (s *Scanner) getNS() string {

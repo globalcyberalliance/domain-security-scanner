@@ -227,3 +227,52 @@ func TestAdvisor_CheckDMARC(t *testing.T) {
 		}
 	})
 }
+
+func TestAdvisor_CheckSPF(t *testing.T) {
+	advisor := NewAdvisor(time.Second, time.Second, false)
+
+	t.Run("Missing", func(t *testing.T) {
+		expectedAdvice := []string{"We couldn't detect any active SPF record for your domain. Please visit https://dmarcguide.globalcyberalliance.org to fix this."}
+		advice := advisor.CheckSPF("")
+
+		if !reflect.DeepEqual(advice, expectedAdvice) {
+			t.Errorf("found %v, want %v", advice, expectedAdvice)
+		}
+	})
+
+	t.Run("PlusAll", func(t *testing.T) {
+		expectedAdvice := []string{"Your SPF record contains the +all tag. It is strongly recommended that this be changed to either -all or ~all. The +all tag allows for any system regardless of SPF to send mail on the organization’s behalf."}
+		advice := advisor.CheckSPF("v=spf1 +all")
+
+		if !reflect.DeepEqual(advice, expectedAdvice) {
+			t.Errorf("found %v, want %v", advice, expectedAdvice)
+		}
+	})
+
+	t.Run("MissingAll", func(t *testing.T) {
+		expectedAdvice := []string{"Your SPF record is missing the all tag. Please visit https://dmarcguide.globalcyberalliance.org to fix this."}
+		advice := advisor.CheckSPF("v=spf1 include:_spf.google.com")
+
+		if !reflect.DeepEqual(advice, expectedAdvice) {
+			t.Errorf("found %v, want %v", advice, expectedAdvice)
+		}
+	})
+
+	t.Run("SoftFail", func(t *testing.T) {
+		expectedAdvice := []string{"SPF seems to be setup correctly, but it's recommended that you change from SoftFail to HardFail"}
+		advice := advisor.CheckSPF("v=spf1 include:_spf.rexx-suite.com ~all")
+
+		if !reflect.DeepEqual(advice, expectedAdvice) {
+			t.Errorf("found %v, want %v", advice, expectedAdvice)
+		}
+	})
+
+	t.Run("HardFail", func(t *testing.T) {
+		expectedAdvice := []string{"SPF seems to be setup correctly! No further action needed."}
+		advice := advisor.CheckSPF("v=spf1 include:_spf.rexx-suite.com -all")
+
+		if !reflect.DeepEqual(advice, expectedAdvice) {
+			t.Errorf("found %v, want %v", advice, expectedAdvice)
+		}
+	})
+}

@@ -22,22 +22,22 @@ var (
 func (s *Server) initializeTemplates() error {
 	htmlTemplate, err := htmlTemplateFile.ReadFile("template.html")
 	if err != nil {
-		return fmt.Errorf("failed to read html template: %w", err)
+		return fmt.Errorf("read html template: %w", err)
 	}
 
 	templateHTML, err := htmlTmpl.New("html").Parse(string(htmlTemplate))
 	if err != nil {
-		return fmt.Errorf("failed to parse html template: %w", err)
+		return fmt.Errorf("parse html template: %w", err)
 	}
 
 	textTemplate, err := textTemplateFile.ReadFile("template.txt")
 	if err != nil {
-		return fmt.Errorf("failed to read txt template: %w", err)
+		return fmt.Errorf("read txt template: %w", err)
 	}
 
 	templateText, err := textTmpl.New("text").Parse(string(textTemplate))
 	if err != nil {
-		return fmt.Errorf("failed to parse txt template: %w", err)
+		return fmt.Errorf("parse txt template: %w", err)
 	}
 
 	s.templateHTML = templateHTML
@@ -77,11 +77,11 @@ func (s *Server) getMailContents(result model.ScanResultWithAdvice) (string, str
 	}
 
 	if err := s.templateHTML.Execute(&htmlBytes, mailData); err != nil {
-		return "", "", fmt.Errorf("failed to execute html template: %w", err)
+		return "", "", fmt.Errorf("execute html template: %w", err)
 	}
 
 	if err := s.templateText.Execute(&textBytes, mailData); err != nil {
-		return "", "", fmt.Errorf("failed to execute text template: %w", err)
+		return "", "", fmt.Errorf("execute text template: %w", err)
 	}
 
 	return htmlBytes.String(), textBytes.String(), nil

@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/klauspost/compress/zstd"
+	"github.com/rs/zerolog"
 )
 
 type responseWriter struct {
@@ -20,6 +21,48 @@ type responseWriter struct {
 
 func (w responseWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
+}
+
+func (s *Server) handleLogging() func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			wrappedWriter := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+
+			if strings.HasPrefix(r.URL.Path, "/api") {
+				startTime := time.Now()
+
+				defer func() {
+					if rec := recover(); rec != nil {
+						s.logger.Error().
+							Interface("recover info", rec).
+							Bytes("debug stack", debug.Stack()).
+							Msg("HTTP panic")
+						http.Error(wrappedWriter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+					}
+
+					uri := r.URL.Path
+					if query := r.URL.Query().Encode(); query != "" {
+						uri += "?" + query
+					}
+
+					logLevel := zerolog.InfoLevel
+					if wrappedWriter.Status() >= http.StatusBadRequest {
+						logLevel = zerolog.WarnLevel
+					}
+
+					s.logger.WithLevel(logLevel).
+						Str("ip", r.RemoteAddr).
+						Str("method", r.Method).
+						Str("uri", uri).
+						Int("status", wrappedWriter.Status()).
+						Int64("latency", time.Since(startTime).Round(time.Millisecond).Milliseconds()).
+						Msg("HTTP request")
+				}()
+			}
+
+			next.ServeHTTP(wrappedWriter, r)
+		})
+	}
 }
 
 func (s *Server) handleRequestCompression(next http.Handler) http.Handler {
@@ -76,46 +119,4 @@ func (s *Server) handleResponseCompression(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-func (s *Server) handleLogging() func(next http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			wrappedWriter := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
-
-			if strings.HasPrefix(r.URL.Path, "/api") {
-				startTime := time.Now()
-
-				defer func() {
-					if rec := recover(); rec != nil {
-						s.logger.Error().
-							Interface("recover info", rec).
-							Bytes("debug stack", debug.Stack()).
-							Msg("HTTP panic")
-						http.Error(wrappedWriter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-					}
-
-					uri := r.URL.Path
-					if query := r.URL.Query().Encode(); query != "" {
-						uri += "?" + query
-					}
-
-					logWithLevel := s.logger.Info()
-					if wrappedWriter.Status() >= 400 {
-						logWithLevel = s.logger.Warn()
-					}
-
-					logWithLevel.
-						Str("ip", r.RemoteAddr).
-						Str("method", r.Method).
-						Str("uri", uri).
-						Int("status", wrappedWriter.Status()).
-						Int64("latency", time.Since(startTime).Round(time.Millisecond).Milliseconds()).
-						Msg("HTTP request")
-				}()
-			}
-
-			next.ServeHTTP(wrappedWriter, r)
-		})
-	}
 }
