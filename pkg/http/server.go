@@ -158,7 +158,7 @@ type httpLogger struct {
 	logger zerolog.Logger
 }
 
-func (l *httpLogger) Write(p []byte) (n int, err error) {
+func (l *httpLogger) Write(p []byte) (int, error) {
 	l.logger.Debug().Msg(string(p))
 	return len(p), nil
 }

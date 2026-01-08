@@ -259,7 +259,7 @@ func TestAdvisor_CheckSPF(t *testing.T) {
 	})
 
 	t.Run("SoftFail", func(t *testing.T) {
-		expectedAdvice := []string{"SPF seems to be setup correctly, but it's recommended that you change from SoftFail to HardFail"}
+		expectedAdvice := []string{"SPF seems to be setup correctly, but it's recommended that you change from SoftFail (~all) to HardFail (-all)"}
 		advice := advisor.CheckSPF("v=spf1 include:_spf.rexx-suite.com ~all")
 
 		if !reflect.DeepEqual(advice, expectedAdvice) {

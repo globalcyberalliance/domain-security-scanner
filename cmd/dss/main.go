@@ -22,7 +22,7 @@ import (
 
 // Support OS-specific path separators.
 const slash = string(os.PathSeparator)
-const version = "3.0.20"
+const version = "3.0.21"
 
 var (
 	advise, checkTLS, zoneFile bool

@@ -54,7 +54,7 @@ func (s *Server) Serve(interval time.Duration) {
 	s.interval = interval
 
 	s.logger.Info().Msg("Starting mail server on mailbox " + s.config.Inbound.User)
-	s.logger.Info().Msg("Mail check interval set to " + cast.ToString(interval*time.Second))
+	s.logger.Info().Msg("Mail check interval set to " + cast.ToString(interval))
 
 	if err := s.handler(); err != nil {
 		s.logger.Fatal().Err(err).Msg("An error occurred while hosting the mail server")
@@ -62,7 +62,7 @@ func (s *Server) Serve(interval time.Duration) {
 }
 
 func (s *Server) handler() error {
-	ticker := time.NewTicker(s.interval * time.Second)
+	ticker := time.NewTicker(s.interval)
 	quit := make(chan struct{})
 	for {
 		select {
