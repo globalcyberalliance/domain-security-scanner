@@ -19,8 +19,8 @@ var (
 	DMARCPrefix = regexp.MustCompile(`^v\s*=\s*DMARC1`) // Matches v=DMARC1 with whitespace (RFC7489).
 	SPFPrefix   = regexp.MustCompile(`^v=(?i)spf1`)
 
-	// knownDkimSelectors is a list of known DKIM selectors.
-	knownDkimSelectors = []string{
+	// knownDKIMSelectors is a list of known DKIM selectors.
+	knownDKIMSelectors = []string{
 		"x",             // Generic
 		"google",        // Google
 		"selector1",     // Microsoft
@@ -94,7 +94,7 @@ func (s *Scanner) getDNSAnswers(domain string, recordType uint16) ([]dns.RR, err
 	}
 
 	if in.Rcode != dns.RcodeSuccess {
-		// disregard NXDOMAIN errors
+		// Disregard NXDOMAIN errors.
 		if in.Rcode == dns.RcodeNameError {
 			return nil, nil
 		}
@@ -140,7 +140,11 @@ func (s *Scanner) getTypeBIMI(domain string) (string, error) {
 // getTypeDKIM queries the DNS server for DKIM records of a domain.
 // It returns a string (DKIM record) and an error if any occurred.
 func (s *Scanner) getTypeDKIM(domain string) (string, error) {
-	selectors := append(s.dkimSelectors, knownDkimSelectors...)
+	selectors := append(s.dkimSelectors, knownDKIMSelectors...)
+
+	// Some Microsoft domains (e.g. "onmicrosoft.com") use dynamic selectors.
+	dashedDomain := strings.ReplaceAll(strings.ToLower(domain), ".", "-")
+	selectors = append(selectors, "selector1-"+dashedDomain, "selector2-"+dashedDomain)
 
 	for _, selector := range selectors {
 		records, err := s.getDNSRecords(selector+"._domainkey."+domain, dns.TypeTXT)
@@ -150,7 +154,7 @@ func (s *Scanner) getTypeDKIM(domain string) (string, error) {
 
 		for index, record := range records {
 			if strings.HasPrefix(record, DKIMPrefix) {
-				// TXT records can be split across multiple strings, so we need to join them
+				// TXT records can be split across multiple strings, we need to join them.
 				return strings.Join(records[index:], ""), nil
 			}
 		}
@@ -173,7 +177,7 @@ func (s *Scanner) getTypeDMARC(domain string) (string, error) {
 
 		for index, record := range records {
 			if DMARCPrefix.MatchString(record) {
-				// TXT records can be split across multiple strings, so we need to join them
+				// TXT records can be split across multiple strings, we need to join them.
 				return strings.Join(records[index:], ""), nil
 			}
 		}

@@ -65,6 +65,7 @@ func NewServer(logger zerolog.Logger, timeout time.Duration, rateLimit int, vers
 		MaxAge:           300, // The maximum value not ignored by any of the major browsers.
 	}))
 	mux.Use(httprate.Limit(rateLimit, 3*time.Second,
+		httprate.WithKeyFuncs(httprate.KeyByRealIP),
 		httprate.WithLimitHandler(func(w http.ResponseWriter, _ *http.Request) {
 			response, err := json.Marshal(huma.Error429TooManyRequests("try again later"))
 			if err != nil {

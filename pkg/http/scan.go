@@ -26,7 +26,7 @@ func (s *Server) registerScanRoutes() {
 		Method:      http.MethodGet,
 		Path:        s.apiPath + "/scan/{domain}",
 		Tags:        []string{"Scan Domains"},
-	}, func(_ context.Context, input *ScanSingleDomainRequest) (*ScanSingleDomainResponse, error) {
+	}, func(ctx context.Context, input *ScanSingleDomainRequest) (*ScanSingleDomainResponse, error) {
 		resp := ScanSingleDomainResponse{}
 
 		if len(input.DKIMSelectors) > 0 {
@@ -35,7 +35,7 @@ func (s *Server) registerScanRoutes() {
 			}
 		}
 
-		results, err := s.Scanner.Scan(input.Domain)
+		results, err := s.Scanner.Scan(ctx, input.Domain)
 		if err != nil {
 			return nil, huma.Error500InternalServerError(err.Error())
 		}
@@ -80,10 +80,10 @@ func (s *Server) registerScanRoutes() {
 		Method:      http.MethodPost,
 		Path:        s.apiPath + "/scan",
 		Tags:        []string{"Scan Domains"},
-	}, func(_ context.Context, input *ScanBulkDomainsRequest) (*ScanBulkDomainResponse, error) {
+	}, func(ctx context.Context, input *ScanBulkDomainsRequest) (*ScanBulkDomainResponse, error) {
 		resp := ScanBulkDomainResponse{}
 
-		results, err := s.Scanner.Scan(input.Body.Domains...)
+		results, err := s.Scanner.Scan(ctx, input.Body.Domains...)
 		if err != nil {
 			return nil, huma.Error500InternalServerError(err.Error())
 		}

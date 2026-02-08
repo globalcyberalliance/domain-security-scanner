@@ -1,6 +1,7 @@
 package mail
 
 import (
+	"context"
 	"fmt"
 	htmlTmpl "html/template"
 	textTmpl "text/template"
@@ -100,7 +101,7 @@ func (s *Server) handler() error {
 				}
 			}
 
-			results, err := s.Scanner.Scan(domainList...)
+			results, err := s.Scanner.Scan(context.Background(), domainList...)
 			if err != nil {
 				s.logger.Error().Err(err).Msg("An error occurred while scanning domains")
 				continue

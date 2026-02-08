@@ -16,7 +16,7 @@ func newScanCMD() *cobra.Command {
 		Example: "  dss scan <STDIN>\n  dss scan globalcyberalliance.org gcaaide.org google.com\n  dss scan -z < zonefile",
 		Short:   "Scan DNS records for one or multiple domains.",
 		Long:    "Scan DNS records for one or multiple domains.\nBy default, the command will listen on STDIN, allowing you to type or pipe multiple domains.",
-		Run: func(_ *cobra.Command, args []string) {
+		Run: func(cmd *cobra.Command, args []string) {
 			sc, err := scanner.New(log, timeout, getScannerOpts()...)
 			if err != nil {
 				log.Fatal().Err(err).Msg("An unexpected error occurred.")
@@ -56,7 +56,7 @@ func newScanCMD() *cobra.Command {
 				for lineScanner.Scan() {
 					domain := lineScanner.Text()
 
-					results, err = sc.Scan(domain)
+					results, err = sc.Scan(cmd.Context(), domain)
 					if err != nil {
 						log.Fatal().Err(err).Msg("An unexpected error occurred.")
 					}
@@ -74,7 +74,7 @@ func newScanCMD() *cobra.Command {
 					printToConsole(resultsWithAdvice)
 				}
 			} else {
-				results, err = sc.Scan(args...)
+				results, err = sc.Scan(cmd.Context(), args...)
 				if err != nil {
 					log.Fatal().Err(err).Msg("An unexpected error occurred.")
 				}

@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"runtime"
@@ -113,7 +114,7 @@ func New(logger zerolog.Logger, timeout time.Duration, opts ...Option) (*Scanner
 }
 
 // Scan scans a list of domains and returns the results.
-func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
+func (s *Scanner) Scan(ctx context.Context, domains ...string) ([]*Result, error) {
 	if s.pool == nil {
 		return nil, errors.New("scanner is closed")
 	}
@@ -139,6 +140,12 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 			defer func() {
 				wg.Done()
 			}()
+
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 
 			var err error
 			result := &Result{
@@ -247,6 +254,10 @@ func (s *Scanner) Scan(domains ...string) ([]*Result, error) {
 
 	wg.Wait()
 
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+
 	return results, nil
 }
 
@@ -274,7 +285,7 @@ func (s *Scanner) ScanZone(zone io.Reader) ([]*Result, error) {
 		domains = append(domains, domain)
 	}
 
-	return s.Scan(domains...)
+	return s.Scan(context.Background(), domains...)
 }
 
 // Close closes the scanner.
