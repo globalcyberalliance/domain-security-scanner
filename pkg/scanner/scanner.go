@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -119,10 +120,8 @@ func (s *Scanner) Scan(ctx context.Context, domains ...string) ([]*Result, error
 		return nil, errors.New("scanner is closed")
 	}
 
-	for _, domain := range domains {
-		if domain == "" {
-			return nil, errors.New("empty domain")
-		}
+	if slices.Contains(domains, "") {
+		return nil, errors.New("empty domain")
 	}
 
 	if len(domains) == 0 {

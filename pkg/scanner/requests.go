@@ -200,8 +200,8 @@ func (s *Scanner) getTypeSPF(domain string) (string, error) {
 				return record, nil
 			}
 
-			parts := strings.Fields(record)
-			for _, part := range parts {
+			parts := strings.FieldsSeq(record)
+			for part := range parts {
 				if strings.Contains(part, "redirect=") {
 					redirectDomain := strings.TrimPrefix(part, "redirect=")
 					return s.getTypeSPF(redirectDomain)

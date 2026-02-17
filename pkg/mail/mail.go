@@ -99,10 +99,10 @@ func (s *Server) GetMail() (map[string]FoundMail, error) {
 		}
 
 		if dkim != "" {
-			dkimHeaders := strings.Split(dkim, ";")
-			for _, dkimHeader := range dkimHeaders {
-				if strings.HasPrefix(dkimHeader, " s=") {
-					dkim = strings.TrimPrefix(dkimHeader, " s=")
+			dkimHeaders := strings.SplitSeq(dkim, ";")
+			for dkimHeader := range dkimHeaders {
+				if after, ok := strings.CutPrefix(dkimHeader, " s="); ok {
+					dkim = after
 					break
 				}
 			}

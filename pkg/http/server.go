@@ -47,7 +47,8 @@ func NewServer(logger zerolog.Logger, timeout time.Duration, rateLimit int, vers
 	config := huma.DefaultConfig("Domain Security Scanner", version)
 	config.CreateHooks = nil
 	config.Info.Description = "The Domain Security Scanner can be used to perform scans against domains for DKIM, DMARC, and SPF DNS records. You can also serve this functionality via an API, or a dedicated mailbox. A web application is also available if organizations would like to perform a single domain scan for DKIM, DMARC or SPF at https://dmarcguide.globalcyberalliance.org."
-	config.DocsPath = "" // Disable Huma's Stoplight handler.
+	config.DocsPath = server.apiPath + "/docs"
+	config.DocsRenderer = huma.DocsRendererScalar
 	config.OpenAPIPath = "/api/v1/docs"
 
 	if rateLimit <= 0 {
@@ -92,15 +93,6 @@ func NewServer(logger zerolog.Logger, timeout time.Duration, rateLimit int, vers
 	}))
 
 	server.router = humachi.New(mux, config)
-	server.router.Adapter().Handle(&huma.Operation{
-		Method: http.MethodGet,
-		Path:   server.apiPath + "/docs",
-	}, func(ctx huma.Context) {
-		ctx.SetHeader("Content-Type", "text/html")
-		if _, err := ctx.BodyWriter().Write([]byte(`<!doctype html><html lang="en"><head><title>Domain Security Scanner - API Reference</title><meta charset="utf-8"><meta content="width=device-width,initial-scale=1" name="viewport"></head><body><script data-url="` + server.apiPath + `/docs.json" id="api-reference"></script><script>let apiReference = document.getElementById("api-reference")</script><script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script></body></html>`)); err != nil {
-			server.logger.Error().Err(err).Msg("An error occurred while serving the API documentation")
-		}
-	})
 	server.registerVersionRoute(version)
 	server.registerScanRoutes()
 
@@ -137,7 +129,7 @@ func (s *Server) Serve(port int) {
 func (s *Server) registerVersionRoute(version string) {
 	type VersionResponse struct {
 		Body struct {
-			Version string `json:"version" doc:"The version of the API." example:"3.0.0"`
+			Version string `json:"version" doc:"The version of the API." example:"3.0.22"`
 		}
 	}
 

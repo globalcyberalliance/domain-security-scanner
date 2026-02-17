@@ -1,4 +1,4 @@
-FROM golang:1.25.3-alpine3.22 AS build
+FROM golang:1.26.0-alpine3.23 AS build
 
 RUN apk add git make \
  && apk cache clean
