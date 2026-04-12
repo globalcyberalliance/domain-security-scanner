@@ -23,7 +23,7 @@ import (
 // Support OS-specific path separators.
 const (
 	slash   = string(os.PathSeparator)
-	version = "3.0.23"
+	version = "3.0.34"
 )
 
 var (
