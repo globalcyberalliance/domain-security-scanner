@@ -5,12 +5,6 @@ RUN apk add git make \
 
 WORKDIR /src
 
-# Install build-time tools (betteralign) via the Makefile so tool versions live in one
-# place. setup-prod skips the lint/format tools `make setup` installs — those run in CI,
-# not the image build. Copied alone so this layer caches until the Makefile changes.
-COPY Makefile ./
-RUN make setup-prod
-
 # Cache Go modules separately so this layer is reused until go.mod/go.sum change.
 COPY go.mod go.sum ./
 RUN go mod download

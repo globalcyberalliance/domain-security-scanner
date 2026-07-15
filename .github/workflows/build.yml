@@ -1,7 +1,10 @@
 name: Build
 
 on:
+  # Only run on pushes to main; PRs are covered by the pull_request trigger. Running on both
+  # unfiltered would build every same-repo PR branch twice (once for push, once for the PR).
   push:
+    branches: [ main ]
   pull_request:
 
 concurrency:

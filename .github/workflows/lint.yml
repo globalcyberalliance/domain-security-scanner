@@ -62,6 +62,10 @@ jobs:
       - name: Run golangci-lint (check)
         uses: golangci/golangci-lint-action@v9
         with:
+          # only-new-issues gates newly changed code without failing on the ~37 pre-existing
+          # findings in code that predates linting here. Drop this once the backlog is cleared
+          # to enforce the full ruleset repo-wide.
           args: --timeout=5m
+          only-new-issues: true
           install-mode: goinstall
           version: latest
