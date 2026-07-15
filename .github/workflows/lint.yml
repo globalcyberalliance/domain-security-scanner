@@ -1,0 +1,67 @@
+name: Lint
+on:
+  pull_request:
+    paths:
+      - "cmd/**"
+      - "pkg/**"
+      - "go.mod"
+      - "go.sum"
+      - "**/*.go"
+      - ".golangci.yml"
+
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    permissions:
+      # Give the default GITHUB_TOKEN write permission to commit and push the
+      # gofumpt/golangci-lint fixes back to the PR branch.
+      contents: write
+      # Allow lint annotations in the PR.
+      pull-requests: read
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '^1.26.0'
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Install gofumpt
+        run: go install mvdan.cc/gofumpt@latest
+
+      - name: Format code
+        run: gofumpt -w .
+
+      - name: Run golangci-lint (fix)
+        uses: golangci/golangci-lint-action@v9
+        with:
+          args: --fix --issues-exit-code=0 --timeout=5m
+          install-mode: goinstall
+          version: latest
+
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: apply linter fixes and formatting"
+          commit_user_name: GCA Bot
+          commit_user_email: 94362713+gca-bot@users.noreply.github.com
+          commit_author: GCA Bot <94362713+gca-bot@users.noreply.github.com>
+
+      - name: Run golangci-lint (check)
+        uses: golangci/golangci-lint-action@v9
+        with:
+          args: --timeout=5m
+          install-mode: goinstall
+          version: latest

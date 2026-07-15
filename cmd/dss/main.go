@@ -21,10 +21,11 @@ import (
 )
 
 // Support OS-specific path separators.
-const (
-	slash   = string(os.PathSeparator)
-	version = "3.0.34"
-)
+const slash = string(os.PathSeparator)
+
+// version is the binary's version. It defaults to the value below and can be
+// overridden at build time via -ldflags "-X main.version=...".
+var version = "3.0.34"
 
 var (
 	advise, checkTLS, zoneFile bool

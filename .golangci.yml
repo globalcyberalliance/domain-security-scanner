@@ -22,27 +22,11 @@ formatters:
   enable:
     - gofumpt # enforces a stricter format than 'gofmt', while being backwards compatible
     - goimports # checks if the code and import statements are formatted according to the 'goimports' command
-
     ## you may want to enable
     #- gci # checks if code and import statements are formatted, with additional rules
     #- gofmt # checks if the code is formatted according to 'gofmt' command
-    #- golines # checks if code is formatted, and fixes long lines
+    #- golines # splits long lines including func signatures — do not enable
     #- swaggo # formats swaggo comments
-
-  # All settings can be found here https://github.com/golangci/golangci-lint/blob/HEAD/.golangci.reference.yml
-  settings:
-    golines:
-      # Target maximum line length.
-      # Default: 100
-      max-len: 200
-      # Shorten single-line comments.
-      # Default: false
-      shorten-comments: true
-      # Default: true
-      reformat-tags: true
-      # Split chained methods on the dots as opposed to the arguments.
-      # Default: true
-      chain-split-dots: false
 
 linters:
   enable:
@@ -55,7 +39,6 @@ linters:
     - cyclop # checks function and package cyclomatic complexity
     - decorder # checks declaration order and count of types, constants, variables and functions
     - depguard # checks if package imports are in a list of acceptable packages
-    - dupl # tool for code clone detection
     - durationcheck # checks for two durations multiplied together
     - embeddedstructfieldcheck # checks embedded types in structs
     - errcheck # checking for unchecked errors, these unchecked errors can be critical bugs in some cases
@@ -66,7 +49,6 @@ linters:
     - fatcontext # detects nested contexts in loops
     - forbidigo # forbids identifiers
     - funcorder # checks the order of functions, methods, and constructors
-    - funlen # tool for detection of long functions
     - gocheckcompilerdirectives # validates go compiler directive comments (//go:)
     - gochecknoinits # checks that no init functions are present in Go code
     - gochecksumtype # checks exhaustiveness on Go "sum types"
@@ -114,6 +96,7 @@ linters:
     - testifylint # checks usage of github.com/stretchr/testify
     - tparallel # detects inappropriate usage of t.Parallel() method in your Go test codes
     - unconvert # removes unnecessary type conversions
+    - unqueryvet # detects "SELECT *" SQL queries
     - unparam # reports unused function parameters
     - unused # checks for unused constants, variables, functions and types
     - usestdlibvars # detects the possibility to use variables/constants from the Go standard library
@@ -149,15 +132,13 @@ linters:
     #- gosmopolitan # reports certain i18n/l10n anti-patterns in your Go codebase
     #- grouper # analyzes expression groups
     #- importas # enforces consistent import aliases
-    #- lll # [replaced by golines] reports long lines
+    #- lll # reports long lines without auto-splitting func signatures
     #- maintidx # measures the maintainability index of each function
     #- misspell # [useless] finds commonly misspelled English words in comments
     #- nlreturn # [too strict and mostly code is not more readable] checks for a new line before return and branch statements to increase code clarity
     #- paralleltest # [too many false positives] detects missing usage of t.Parallel() method in your Go test
-    #- tagliatelle # checks the struct tags
     #- thelper # detects golang test helpers without t.Helper() call and checks the consistency of test helpers
-    #- wsl # [too strict and mostly code is not more readable] whitespace linter forces you to use empty lines
-    #- wsl_v5 # [too strict and mostly code is not more readable] add or remove empty lines
+    #- wsl_v5 # newline formatting
 
   # All settings can be found here https://github.com/golangci/golangci-lint/blob/HEAD/.golangci.reference.yml
   settings:
@@ -217,6 +198,11 @@ linters:
           deny:
             - pkg: log$
               desc: Use log/slog instead, see https://go.dev/blog/slog
+
+    dupl:
+      # Tokens count to trigger issue.
+      # Default: 150
+      threshold: 200  # Higher threshold = less sensitive.
 
     embeddedstructfieldcheck:
       # Checks that sync.Mutex and sync.RWMutex are not used as embedded fields.
@@ -291,18 +277,37 @@ linters:
       min-complexity: 30
 
     gocritic:
+      enabled-checks:
+        # Detects nil usages in http.NewRequest calls, suggesting http.NoBody as an alternative.
+        # https://go-critic.com/overview.html#httpnobody
+        - httpNoBody
+        # Detects "%s" formatting directives that can be replaced with %q.
+        # https://go-critic.com/overview.html#sprintfquotedstring
+        - sprintfQuotedString
+        # Detects issue in Query() and Exec() calls.
+        # https://go-critic.com/overview.html#sqlquery
+        - sqlQuery
+        # Detects unchecked errors in if statements.
+        # https://go-critic.com/overview.html#uncheckedinlineerr
+        - uncheckedInlineErr
       # Settings passed to gocritic.
       # The settings key is the name of a supported gocritic checker.
       # The list of supported checkers can be found at https://go-critic.com/overview.
       settings:
         captLocal:
-          # Whether to restrict checker to params only.
+          # Whether to restrict the checker to params only.
           # Default: true
           paramsOnly: false
         underef:
           # Whether to skip (*x).method() calls where x is a pointer receiver.
           # Default: true
           skipRecvDeref: false
+
+    gocyclo:
+      # Minimal code complexity to report.
+      # Default: 30.
+      # We up this to 45, as it often results in arbitrarily breaking up longer functions, often without any benefit.
+      min-complexity: 45
 
     govet:
       # Enable all analyzers.
@@ -318,12 +323,20 @@ linters:
         shadow:
           # Whether to be strict about shadowing; can be noisy.
           # Default: false
-          strict: true
+          strict: false
 
     inamedparam:
       # Skips check for interface methods with only a single parameter.
       # Default: false
       skip-single-param: true
+
+    ireturn:
+      allow:
+        - error
+        - empty
+        - anon
+        - stdlib
+        - generic     # Also allow generic type parameters.
 
     mnd:
       # List of function patterns to exclude from analysis.
@@ -358,7 +371,7 @@ linters:
     nolintlint:
       # Exclude following linters from requiring an explanation.
       # Default: []
-      allow-no-explanation: [ funlen, gocognit, golines ]
+      allow-no-explanation: [ funlen, gocognit ]
       # Enable to require an explanation of nonzero length after each nolint directive.
       # Default: false
       require-explanation: true
@@ -377,6 +390,11 @@ linters:
       # Default: ["EOF", "Err.*"]
       patterns:
         - ".*"
+
+    revive:
+      rules:
+        - name: context-keys-type
+          disabled: true  # Allow basic types as context keys.
 
     rowserrcheck:
       # database/sql is always checked.
@@ -408,6 +426,8 @@ linters:
       # Default: ["all", "-ST1000", "-ST1003", "-ST1016", "-ST1020", "-ST1021", "-ST1022"]
       checks:
         - all
+        # Allow built-in types as context keys.
+        - -SA1029
         # Incorrect or missing package comment.
         # https://staticcheck.dev/docs/checks/#ST1000
         - -ST1000
@@ -418,31 +438,39 @@ linters:
         # https://staticcheck.dev/docs/checks/#QF1008
         - -QF1008
 
+    tagliatelle:
+      case:
+        rules:
+          json: goCamel  # Use Go-style camelCase which preserves acronyms.
+          yaml: goCamel
+          xml: goCamel
+          bson: goCamel
+          avro: goCamel
+          mapstructure: goCamel
+
     usetesting:
       # Enable/disable `os.TempDir()` detections.
       # Default: false
       os-temp-dir: true
 
-    wrapcheck:
-      ignoreSigs:
-        - ".CommitRead("
-        - ".CommitWrite("
-
   exclusions:
-    paths:
-      - 'cmd/tmp'
-      - 'docs'
-      - 'ui'
     # Log a warning if an exclusion rule is unused.
     # Default: false
-    warn-unused: true
+    warn-unused: false
     # Predefined exclusion rules.
     # Default: []
     presets:
-      - std-error-handling
       - common-false-positives
+      - std-error-handling
     # Excluding configuration per-path, per-linter, per-text and per-source.
     rules:
+      # Exclude shadow warnings for 'err', 'exists', and 'ok' variables.
+      - text: 'shadow: declaration of "(err|exists|ok)" shadows declaration'
+        linters: [ govet ]
+      # Test functions can have higher complexity due to multiple test cases.
+      - path: '_test\.go'
+        text: 'cognitive complexity .* of func'
+        linters: [ gocognit ]
       - source: 'TODO'
         linters: [ godot ]
       - text: 'should have a package comment'

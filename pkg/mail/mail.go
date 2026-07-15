@@ -72,10 +72,11 @@ func (s *Server) GetMail() (map[string]FoundMail, error) {
 		headerScanner := bufio.NewScanner(header)
 		var dkimDone, dkimFound bool
 		var dkim string
+		var dkimSb75 strings.Builder
 		for headerScanner.Scan() {
 			if dkimFound {
 				if headerScanner.Text() != strings.TrimSpace(headerScanner.Text()) {
-					dkim += headerScanner.Text()
+					dkimSb75.WriteString(headerScanner.Text())
 				} else {
 					dkimDone = true
 					dkimFound = false
@@ -84,10 +85,11 @@ func (s *Server) GetMail() (map[string]FoundMail, error) {
 			if !dkimDone {
 				if strings.Contains(headerScanner.Text(), "DKIM-Signature") {
 					dkimFound = true
-					dkim += strings.Trim(headerScanner.Text(), "DKIM-Signature:")
+					dkimSb75.WriteString(strings.Trim(headerScanner.Text(), "DKIM-Signature:"))
 				}
 			}
 		}
+		dkim += dkimSb75.String()
 
 		if dkimDone {
 			dkim = strings.ReplaceAll(dkim, " ", "")

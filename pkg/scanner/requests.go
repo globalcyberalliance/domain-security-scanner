@@ -72,7 +72,10 @@ func (s *Scanner) getDNSRecords(domain string, recordType uint16) ([]string, err
 		case *dns.NS:
 			records = append(records, dnsRec.Ns)
 		case *dns.TXT:
-			records = append(records, strings.Join(dnsRec.Txt, " "))
+			// A single TXT record can be split into multiple character-strings
+			// (each capped at 255 bytes). Per RFC 7208 §3.3 they must be
+			// concatenated without adding spaces.
+			records = append(records, strings.Join(dnsRec.Txt, ""))
 		}
 	}
 
@@ -116,21 +119,22 @@ func (s *Scanner) getDNSAnswers(domain string, recordType uint16) ([]dns.RR, err
 	return in.Answer, nil
 }
 
+// getTypeBIMI queries the DNS server for BIMI records of a domain.
+// It returns a string (BIMI record) and an error if any occurred.
+//
+// A BIMI record MUST be published at "<selector>._bimi.<domain>" (the "default"
+// selector when none is specified). A record at the domain apex is ignored by
+// conforming mail receivers, so we only query the "default._bimi" subdomain
+// rather than falling back to the root.
 func (s *Scanner) getTypeBIMI(domain string) (string, error) {
-	for _, dname := range []string{
-		"default._bimi." + domain,
-		domain,
-	} {
-		records, err := s.getDNSRecords(dname, dns.TypeTXT)
-		if err != nil {
-			return "", err
-		}
+	records, err := s.getDNSRecords("default._bimi."+domain, dns.TypeTXT)
+	if err != nil {
+		return "", err
+	}
 
-		for index, record := range records {
-			if strings.HasPrefix(record, BIMIPrefix) {
-				// TXT records can be split across multiple strings, so we need to join them
-				return strings.Join(records[index:], ""), nil
-			}
+	for _, record := range records {
+		if strings.HasPrefix(record, BIMIPrefix) {
+			return record, nil
 		}
 	}
 
@@ -152,10 +156,9 @@ func (s *Scanner) getTypeDKIM(domain string) (string, error) {
 			return "", err
 		}
 
-		for index, record := range records {
+		for _, record := range records {
 			if strings.HasPrefix(record, DKIMPrefix) {
-				// TXT records can be split across multiple strings, we need to join them.
-				return strings.Join(records[index:], ""), nil
+				return record, nil
 			}
 		}
 	}
@@ -165,21 +168,19 @@ func (s *Scanner) getTypeDKIM(domain string) (string, error) {
 
 // getTypeDMARC queries the DNS server for DMARC records of a domain.
 // It returns a string (DMARC record) and an error if any occurred.
+//
+// Per RFC 7489 §6.1 a DMARC record MUST be published at "_dmarc.<domain>". A
+// record at the domain apex is ignored by conforming mail receivers, so we only
+// query the "_dmarc" subdomain rather than falling back to the root.
 func (s *Scanner) getTypeDMARC(domain string) (string, error) {
-	for _, dname := range []string{
-		"_dmarc." + domain,
-		domain,
-	} {
-		records, err := s.getDNSRecords(dname, dns.TypeTXT)
-		if err != nil {
-			return "", err
-		}
+	records, err := s.getDNSRecords("_dmarc."+domain, dns.TypeTXT)
+	if err != nil {
+		return "", err
+	}
 
-		for index, record := range records {
-			if DMARCPrefix.MatchString(record) {
-				// TXT records can be split across multiple strings, we need to join them.
-				return strings.Join(records[index:], ""), nil
-			}
+	for _, record := range records {
+		if DMARCPrefix.MatchString(record) {
+			return record, nil
 		}
 	}
 
