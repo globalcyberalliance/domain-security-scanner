@@ -3,10 +3,21 @@ on:
   release:
     types: [ released ]
 
+concurrency:
+  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.event.release.tag_name }}
+
+# Default to read-only. Only the jobs that need it opt into write scopes at the job level,
+# so metadata/build jobs never inherit rights they don't use.
+permissions:
+  contents: read
+
 jobs:
   binary:
     name: Build and Release Binaries
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
@@ -17,11 +28,13 @@ jobs:
           go-version: '^1.26.0'
 
       - name: Build Binaries
+        env:
+          TAG: ${{ github.event.release.tag_name }}
         run: |
           mkdir -p builds/compressed
           go install github.com/mitchellh/gox@latest
           cd cmd/dss
-          gox --output "../../builds/dss-{{.OS}}-{{.Arch}}" -ldflags '-s -w' -osarch 'darwin/amd64 darwin/arm64 linux/amd64 linux/arm freebsd/amd64 windows/amd64'
+          gox --output "../../builds/dss-{{.OS}}-{{.Arch}}" -ldflags "-s -w -X main.version=${TAG}" -osarch 'darwin/amd64 darwin/arm64 linux/amd64 linux/arm freebsd/amd64 windows/amd64'
           cd ../../builds
           find . -maxdepth 1 -type f -execdir zip 'compressed/{}.zip' '{}' \;
 
@@ -41,15 +54,15 @@ jobs:
       tags: ${{ steps.setenv.outputs.tags }}
       tags_latest: ${{ steps.setenv.outputs.tags_latest }}
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
-
       - id: setenv
+        env:
+          # Canonical release tag — github.ref_name can resolve empty on release events, which
+          # would tag images :latest and embed an empty main.version (dropping --version).
+          TAG_NAME: ${{ github.event.release.tag_name }}
         run: |
           IMAGE_ID=${GITHUB_REPOSITORY,,}
-          TAG_NAME="${{ github.ref_name }}"
 
-          # Support both specific version (from release tag) and latest
+          # Support both specific version (from release tag) and latest.
           TAGS="ghcr.io/${IMAGE_ID}:${TAG_NAME}"
           TAGS_LATEST="ghcr.io/${IMAGE_ID}:latest"
           CACHE_TAGS="ghcr.io/${IMAGE_ID}:buildcache"
@@ -63,6 +76,9 @@ jobs:
     name: Build amd64 image
     runs-on: ubuntu-latest
     needs: setup
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -91,12 +107,15 @@ jobs:
           cache-from: type=registry,ref=${{ needs.setup.outputs.cache_tags }}
           cache-to: type=registry,ref=${{ needs.setup.outputs.cache_tags }},mode=max
           build-args: |
-            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            VERSION=${{ github.event.release.tag_name }}
 
   build-arm64:
     name: Build arm64 image
     runs-on: ubuntu-24.04-arm
     needs: setup
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -125,12 +144,14 @@ jobs:
           cache-from: type=registry,ref=${{ needs.setup.outputs.cache_tags }}
           cache-to: type=registry,ref=${{ needs.setup.outputs.cache_tags }},mode=max
           build-args: |
-            GITHUB_TOKEN=${{ secrets.GH_ACCESS_TOKEN }}
+            VERSION=${{ github.event.release.tag_name }}
 
   merge:
     name: Merge multi-arch image
     runs-on: ubuntu-latest
     needs: [ setup, build-amd64, build-arm64 ]
+    permissions:
+      packages: write
     outputs:
       image_tag: ${{ needs.setup.outputs.tags }}
     steps:
